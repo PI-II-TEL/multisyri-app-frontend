@@ -1,15 +1,21 @@
 'use client'
-import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Toast } from './Toast'
+import type { ReactElement } from 'react'
 
-const tabs = [
+export interface NavTab {
+  href: string
+  label: string
+  protected?: boolean
+  icon: (active: boolean) => ReactElement
+}
+
+export const MONITOR_TABS: NavTab[] = [
   {
     href: '/home',
     label: 'INICIO',
-    protected: false,
-    icon: (active: boolean) => (
+    icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         <polyline points="9 22 9 12 15 12 15 22"/>
@@ -19,8 +25,8 @@ const tabs = [
   {
     href: '/map',
     label: 'MAPA',
-    protected: true, // requires active session
-    icon: (active: boolean) => (
+    protected: true,
+    icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
         <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
@@ -30,8 +36,7 @@ const tabs = [
   {
     href: '/support',
     label: 'SOPORTES',
-    protected: false,
-    icon: (active: boolean) => (
+    icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
         <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
@@ -41,8 +46,7 @@ const tabs = [
   {
     href: '/profile',
     label: 'PERFIL',
-    protected: false,
-    icon: (active: boolean) => (
+    icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
@@ -51,7 +55,54 @@ const tabs = [
   },
 ]
 
-export default function BottomNav() {
+export const COORDINATOR_TABS: NavTab[] = [
+  {
+    href: '/map',
+    label: 'MAPA',
+    icon: (active) => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+        <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/support',
+    label: 'SOPORTES',
+    icon: (active) => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+        <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/team',
+    label: 'EQUIPO',
+    icon: (active) => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/buildings',
+    label: 'ADMIN',
+    icon: (active) => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+      </svg>
+    ),
+  },
+]
+
+interface BottomNavProps {
+  tabs?: NavTab[]
+}
+
+export default function BottomNav({ tabs = MONITOR_TABS }: BottomNavProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [showToast, setShowToast] = useState(false)
@@ -76,8 +127,8 @@ export default function BottomNav() {
           className="flex w-full max-w-sm rounded-[36px] border border-[#E4E4E7] overflow-hidden bg-white"
           style={{ height: 62, padding: 4 }}
         >
-          {tabs.map(({ href, label, icon, protected: isProtected }) => {
-            const active = pathname === href || (href === '/map' && pathname.startsWith('/map'))
+          {tabs.map(({ href, label, icon, protected: isProtected = false }) => {
+            const active = pathname === href || (pathname.startsWith(href + '/') && href !== '/home')
             return (
               <button
                 key={href}

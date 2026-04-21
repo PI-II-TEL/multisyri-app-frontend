@@ -19,7 +19,7 @@ npm run lint   # ESLint checks
 
 - **Next.js 16** with App Router (file-based routing under `src/app/`)
 - **React 19**
-- **TypeScript 5** (strict mode, path alias `@/*` → `./*`)
+- **TypeScript 5** (strict mode, path alias `@/*` → `./src/*`)
 - **Tailwind CSS 4** via `@tailwindcss/postcss`
 - **ESLint 9** flat config (`eslint.config.mjs`)
 
@@ -29,24 +29,49 @@ The project uses the **Next.js App Router** exclusively — no Pages Router. All
 
 ```
 src/
-  app/          # Routes, layouts, and pages
-  components/   # Reusable UI components
-  hooks/        # Custom React hooks
-  store/        # Global state management (not yet implemented)
-  services/     # API/external service clients
-  lib/          # Shared utility libraries
-  types/        # TypeScript type definitions
-  utils/        # Helper functions
+  app/
+    (shifts)/       # Monitor routes: /home, /map, /support, /handover
+    (dashboard)/    # Coordinator routes: /buildings, …
+  components/
+    ui/             # Generic: Button, Modal, ConfirmDialog, EmptyState, LoadingSpinner, Icon
+    buildings/      # HU-22: BuildingCard, BuildingList, BuildingForm, ClassroomList, ClassroomForm, EquipmentManager
+    BottomNav.tsx   # Shared bottom tab bar (configurable tabs)
+    Toast.tsx       # Toast notifications
+  contexts/
+    AuthContext.tsx # JWT + localStorage auth, exposes isCoordinator
+  hooks/            # useBuildings, useClassrooms, useEquipment
+  services/
+    api.ts          # apiFetch — base fetch with Bearer token
+    shifts.ts       # check-in / check-out / handover API calls
+    buildings.ts    # buildings / classrooms / equipment API calls
+  types/
+    shift.ts        # ShiftSession, Handover, FaultType, etc.
+    buildings.ts    # Building, Classroom, ClassroomEquipment (imports FaultType from shift.ts)
+  utils/            # Helper functions
 ```
 
-Most directories currently contain only `.keep` placeholders — the project is in early development. State management library is not yet chosen.
+## Path Alias
+
+`@/*` maps to `src/` — e.g. `import { apiFetch } from '@/services/api'`.
+
+## Routing
+
+- `(shifts)` group uses **BottomNav** with monitor tabs (INICIO, MAPA, SOPORTES, PERFIL).
+- `(dashboard)` group uses **BottomNav** with coordinator tabs (MAPA, SOPORTES, EQUIPO, ADMIN).
+- Each group provides its own layout. `AuthProvider` lives in the root layout via `src/components/Providers.tsx`.
+
+## API
+
+Base URL: `process.env.NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000/api/v1`).  
+All calls go through `apiFetch` from `src/services/api.ts`. Token is read from `localStorage['access_token']`.
 
 ## Styling
 
-- Tailwind v4 is imported via `@import "tailwindcss"` in `globals.css` (not the v3 `@tailwind` directives).
-- Theme uses CSS custom properties (`--background`, `--foreground`) with dark mode via `prefers-color-scheme`.
-- Fonts: Geist Sans and Geist Mono, injected as CSS variables (`--font-geist-sans`, `--font-geist-mono`).
+- Tailwind v4 is imported via `@import "tailwindcss"` in `globals.css`.
+- Brand primary: `#0A2463`. Secondary text: `#6B7280`. Cards: `border-[#E5E7EB]`, `cornerRadius: 12px`.
+- Fonts: Geist Sans/Mono as CSS variables.
 
 ## Environment Variables
 
-No `.env` file exists yet. Local overrides go in `.env.local` (gitignored). Never commit `.env` files.
+No `.env` file committed. Use `.env.local` (gitignored) for local overrides.  
+Key variable: `NEXT_PUBLIC_API_URL=http://localhost:8005/api/v1`
