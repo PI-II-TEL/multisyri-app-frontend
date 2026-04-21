@@ -65,12 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setAuth = useCallback((newUser: AuthUser, token: string) => {
     localStorage.setItem('access_token', token)
     localStorage.setItem('user', JSON.stringify(newUser))
+    document.cookie = `role=${newUser.role}; path=/; SameSite=Lax`
     setUser(newUser)
   }, [])
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
+    document.cookie = 'role=; path=/; max-age=0'
     setUser(null)
   }, [])
 

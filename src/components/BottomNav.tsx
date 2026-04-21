@@ -8,6 +8,7 @@ export interface NavTab {
   href: string
   label: string
   protected?: boolean
+  disabled?: boolean
   icon: (active: boolean) => ReactElement
 }
 
@@ -59,6 +60,7 @@ export const COORDINATOR_TABS: NavTab[] = [
   {
     href: '/map',
     label: 'MAPA',
+    disabled: true,
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
@@ -69,6 +71,7 @@ export const COORDINATOR_TABS: NavTab[] = [
   {
     href: '/support',
     label: 'SOPORTES',
+    disabled: true,
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
@@ -79,6 +82,7 @@ export const COORDINATOR_TABS: NavTab[] = [
   {
     href: '/team',
     label: 'EQUIPO',
+    disabled: true,
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -127,14 +131,15 @@ export default function BottomNav({ tabs = MONITOR_TABS }: BottomNavProps) {
           className="flex w-full max-w-sm rounded-[36px] border border-[#E4E4E7] overflow-hidden bg-white"
           style={{ height: 62, padding: 4 }}
         >
-          {tabs.map(({ href, label, icon, protected: isProtected = false }) => {
+          {tabs.map(({ href, label, icon, protected: isProtected = false, disabled = false }) => {
             const active = pathname === href || (pathname.startsWith(href + '/') && href !== '/home')
             return (
               <button
                 key={href}
-                onClick={() => handleTabClick(href, isProtected)}
-                className="flex-1 flex flex-col items-center justify-center gap-1 rounded-[26px] transition-colors"
-                style={{ background: active ? '#0A2463' : 'transparent' }}
+                onClick={() => !disabled && handleTabClick(href, isProtected)}
+                disabled={disabled}
+                className="flex-1 flex flex-col items-center justify-center gap-1 rounded-[26px] transition-colors disabled:cursor-not-allowed"
+                style={{ background: active ? '#0A2463' : 'transparent', opacity: disabled ? 0.35 : 1 }}
               >
                 {icon(active)}
                 <span
