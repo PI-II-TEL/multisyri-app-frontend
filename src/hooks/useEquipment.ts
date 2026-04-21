@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, startTransition } from 'react'
 import * as api from '@/services/buildings'
 import type { ClassroomEquipment } from '@/types/buildings'
 import type { FaultType } from '@/types/shift'
@@ -23,7 +23,7 @@ export function useEquipment(classroomId: string) {
     }
   }, [classroomId])
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => { startTransition(() => { void fetch() }) }, [fetch])
 
   const assignedTypes = new Set(equipment.map((e) => e.fault_type))
 

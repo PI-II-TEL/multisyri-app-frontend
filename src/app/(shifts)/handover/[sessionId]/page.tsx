@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import { acknowledgeHandover } from '@/services/shifts'
@@ -29,8 +29,10 @@ export default function HandoverPage({ params }: { params: Promise<{ sessionId: 
     try {
       const raw = localStorage.getItem('handover')
       const sess = localStorage.getItem('active_session')
-      if (raw) setHandover(JSON.parse(raw))
-      if (sess) setCheckinAt(JSON.parse(sess).checkin_at)
+      startTransition(() => {
+        if (raw) setHandover(JSON.parse(raw))
+        if (sess) setCheckinAt(JSON.parse(sess).checkin_at)
+      })
     } catch {}
   }, [])
 

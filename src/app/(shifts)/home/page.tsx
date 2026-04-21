@@ -1,10 +1,13 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import { checkIn, getActiveSession } from '@/services/shifts'
 import type { ShiftSession, CheckInResponse } from '@/types/shift'
 import type { ApiError } from '@/services/api'
+import { useAuth } from '@/contexts/AuthContext'
+import { logoutRequest } from '@/services/auth'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 const SEED_BUILDING_ID = 'aaaaaaaa-0000-0000-0000-000000000001'
 const SEED_SCHEDULE_SHIFT_ID = 'bbbbbbbb-0000-0000-0000-000000000001'
@@ -18,6 +21,8 @@ function formatDate(iso: string) {
 
 export default function HomePage() {
   const router = useRouter()
+  const { clearAuth } = useAuth()
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [session, setSession] = useState<ShiftSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [checking, setChecking] = useState(false)
@@ -30,8 +35,10 @@ export default function HomePage() {
       const raw = localStorage.getItem('user')
       if (raw) {
         const u = JSON.parse(raw)
-        setUserName(u.name ?? '')
-        setHoursRecorded(parseFloat(u.hours_recorded ?? '0'))
+        startTransition(() => {
+          setUserName(u.name ?? '')
+          setHoursRecorded(parseFloat(u.hours_recorded ?? '0'))
+        })
       }
     } catch {}
   }, [])
@@ -47,7 +54,7 @@ export default function HomePage() {
     }
   }, [])
 
-  useEffect(() => { loadSession() }, [loadSession])
+  useEffect(() => { startTransition(() => { void loadSession() }) }, [loadSession])
 
   async function handleCheckIn() {
     setChecking(true)
@@ -66,6 +73,18 @@ export default function HomePage() {
     }
   }
 
+  async function handleLogout() {
+    const refreshToken = localStorage.getItem('refresh_token')
+    try {
+      if (refreshToken) await logoutRequest(refreshToken)
+    } catch {
+      // Limpia la sesión local aunque el API falle
+    } finally {
+      clearAuth()
+      router.push('/login')
+    }
+  }
+
   const hoursGoal = 40
   const pct = Math.min(100, Math.round((hoursRecorded / hoursGoal) * 100))
 
@@ -80,10 +99,23 @@ export default function HomePage() {
           </span>
           <span className="text-[13px] text-[#6B7280]">Monitor · Edificio A</span>
         </div>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
+        <div className="flex items-center gap-1">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <button
+            onClick={() => setShowLogoutConfirm(true)}
+            className="rounded-full p-1.5 text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors"
+            aria-label="Cerrar sesión"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Scrollable content — pb accounts for BottomNav (~94px) */}
@@ -179,6 +211,14 @@ export default function HomePage() {
 
       {/* BottomNav is fixed at bottom-0, height ~94px */}
       <BottomNav />
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Cerrar sesión"
+        description="¿Estás seguro de que quieres cerrar sesión?"
+        confirmLabel="Cerrar sesión"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </div>
   )
 }

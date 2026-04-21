@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import { checkOut, getActiveSession } from '@/services/shifts'
@@ -94,7 +94,7 @@ export default function MapPage() {
     }
   }, [router])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { startTransition(() => { void loadData() }) }, [loadData])
 
   async function handleCheckOut(force = false) {
     setChecking(true)
