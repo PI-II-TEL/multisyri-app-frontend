@@ -66,3 +66,14 @@ export const removeEquipment = (classroomId: string, faultType: FaultType) =>
   apiFetch<null>(`/buildings/classrooms/${classroomId}/equipment/${faultType}`, {
     method: 'DELETE',
   })
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+export interface InfraStats {
+  total_buildings: number
+  total_classrooms: number
+  total_equipment: number
+}
+
+export const getInfraStats = () =>
+  apiFetch<InfraStats>('/buildings/stats')

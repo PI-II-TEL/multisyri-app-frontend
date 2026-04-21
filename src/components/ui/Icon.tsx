@@ -22,7 +22,11 @@ type IconName =
   | "users"
   | "bell"
   | "save"
-  | "loader";
+  | "loader"
+  | "zap"
+  | "calendar-plus"
+  | "circle-plus"
+  | "link";
 
 const PATHS: Record<IconName, string> = {
   building:
@@ -58,6 +62,12 @@ const PATHS: Record<IconName, string> = {
   bell: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9 M10.3 21a1.94 1.94 0 0 0 3.4 0",
   save: "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z M17 21v-8H7v8 M7 3v5h8",
   loader: "M21 12a9 9 0 1 1-6.219-8.56",
+  zap: "M13 2L3 14L12 14L11 22L21 10L12 10Z",
+  "calendar-plus":
+    "M8 2v4 M16 2v4 M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7 M3 10h18 M16 19h6 M19 16v6",
+  "circle-plus":
+    "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z M8 12h8 M12 8v8",
+  link: "M10 13a5 5 0 0 0 7.54 0.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-0.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
 };
 
 interface IconProps extends SVGProps<SVGSVGElement> {
