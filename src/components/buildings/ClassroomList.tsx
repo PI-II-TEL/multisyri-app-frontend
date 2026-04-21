@@ -13,15 +13,16 @@ import type { Classroom } from "@/types/buildings";
 
 interface ClassroomListProps {
   buildingId: string;
+  autoCreate?: boolean;
 }
 
-export function ClassroomList({ buildingId }: ClassroomListProps) {
+export function ClassroomList({ buildingId, autoCreate = false }: ClassroomListProps) {
   const router = useRouter();
   const { isCoordinator } = useAuth();
   const { classrooms, isLoading, error, createClassroom, updateClassroom, deleteClassroom } =
     useClassrooms(buildingId);
 
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(autoCreate);
   const [editing, setEditing] = useState<Classroom | null>(null);
   const [deleting, setDeleting] = useState<Classroom | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);

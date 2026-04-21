@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { useInfraStats } from "@/hooks/useInfraStats";
+import { CreateEntityModal } from "@/components/buildings/CreateEntityModal";
 
 export default function AdminPanelPage() {
   const router = useRouter();
   const { stats, loading } = useInfraStats();
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   return (
     <div className="flex flex-col">
@@ -102,7 +105,7 @@ export default function AdminPanelPage() {
 
           {/* Crear Edificio / Salón */}
           <button
-            onClick={() => router.push("/buildings/list?new=building")}
+            onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"
           >
             <Icon name="circle-plus" size={22} className="shrink-0 text-[#1565C0]" />
@@ -135,6 +138,11 @@ export default function AdminPanelPage() {
           </button>
         </div>
       </div>
+
+      <CreateEntityModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ClassroomList } from "@/components/buildings/ClassroomList";
 import { BuildingForm } from "@/components/buildings/BuildingForm";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -9,10 +9,13 @@ import { Icon } from "@/components/ui/Icon";
 import { useAuth } from "@/contexts/AuthContext";
 import * as api from "@/services/buildings";
 
-export default function BuildingDetailPage() {
+function BuildingDetailContent() {
   const { buildingId } = useParams<{ buildingId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isCoordinator } = useAuth();
+
+  const autoCreateClassroom = searchParams.get("new") === "classroom";
 
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -29,7 +32,7 @@ export default function BuildingDetailPage() {
     setDeleteLoading(true);
     try {
       await api.deleteBuilding(buildingId);
-      router.push("/buildings");
+      router.push("/buildings/list");
     } catch {
       setDeleteLoading(false);
     }
@@ -75,16 +78,14 @@ export default function BuildingDetailPage() {
         )}
       </header>
 
-      {/* Section label */}
       <div className="px-5 pb-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9CA3AF]">
           Salones
         </p>
       </div>
 
-      {/* Content */}
       <div className="px-4">
-        <ClassroomList buildingId={buildingId} />
+        <ClassroomList buildingId={buildingId} autoCreate={autoCreateClassroom} />
       </div>
 
       {showEdit && (
@@ -105,5 +106,13 @@ export default function BuildingDetailPage() {
         onCancel={() => setShowDelete(false)}
       />
     </div>
+  );
+}
+
+export default function BuildingDetailPage() {
+  return (
+    <Suspense>
+      <BuildingDetailContent />
+    </Suspense>
   );
 }
