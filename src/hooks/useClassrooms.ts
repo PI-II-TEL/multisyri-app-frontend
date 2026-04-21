@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, startTransition } from 'react'
 import * as api from '@/services/buildings'
 import type { Classroom, ClassroomUpdate } from '@/types/buildings'
 
@@ -22,7 +22,7 @@ export function useClassrooms(buildingId: string) {
     }
   }, [buildingId])
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => { startTransition(() => { void fetch() }) }, [fetch])
 
   const createClassroom = async (name: string) => {
     const created = await api.createClassroom(buildingId, { name })

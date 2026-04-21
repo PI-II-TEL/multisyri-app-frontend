@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, startTransition } from 'react'
 import * as api from '@/services/buildings'
 import type { Building, BuildingCreate, BuildingUpdate } from '@/types/buildings'
 
@@ -21,7 +21,7 @@ export function useBuildings() {
     }
   }, [])
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => { startTransition(() => { void fetch() }) }, [fetch])
 
   const createBuilding = async (data: BuildingCreate) => {
     const created = await api.createBuilding(data)

@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  startTransition,
   type ReactNode,
 } from 'react'
 
@@ -59,7 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
 
   useEffect(() => {
-    setUser(readUserFromStorage())
+    startTransition(() => {
+      setUser(readUserFromStorage())
+    })
   }, [])
 
   const setAuth = useCallback((newUser: AuthUser, token: string) => {

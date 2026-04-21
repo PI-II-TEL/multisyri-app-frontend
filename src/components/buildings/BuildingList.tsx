@@ -7,7 +7,6 @@ import { BuildingForm } from "./BuildingForm";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { useBuildings } from "@/hooks/useBuildings";
 import { useAuth } from "@/contexts/AuthContext";

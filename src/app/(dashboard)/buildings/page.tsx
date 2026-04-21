@@ -5,11 +5,28 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { useInfraStats } from "@/hooks/useInfraStats";
 import { CreateEntityModal } from "@/components/buildings/CreateEntityModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { logoutRequest } from "@/services/auth";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export default function AdminPanelPage() {
   const router = useRouter();
   const { stats, loading } = useInfraStats();
+  const { clearAuth } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  async function handleLogout() {
+    const refreshToken = localStorage.getItem("refresh_token");
+    try {
+      if (refreshToken) await logoutRequest(refreshToken);
+    } catch {
+      // Limpia la sesión local aunque el API falle
+    } finally {
+      clearAuth();
+      router.push("/login");
+    }
+  }
 
   return (
     <div className="flex flex-col">
@@ -19,12 +36,21 @@ export default function AdminPanelPage() {
           <h1 className="text-lg font-bold text-[#0A2463]">Panel Admin</h1>
           <p className="text-xs text-[#6B7280]">Infraestructura y Auditoría</p>
         </div>
-        <button
-          className="rounded-full p-1.5 text-[#6B7280] hover:bg-gray-100"
-          aria-label="Notificaciones"
-        >
-          <Icon name="bell" size={20} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            className="rounded-full p-1.5 text-[#6B7280] hover:bg-gray-100"
+            aria-label="Notificaciones"
+          >
+            <Icon name="bell" size={20} />
+          </button>
+          <button
+            onClick={() => setShowLogoutConfirm(true)}
+            className="rounded-full p-1.5 text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors"
+            aria-label="Cerrar sesión"
+          >
+            <Icon name="log-out" size={20} />
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-col gap-4 px-4 pb-4">
@@ -136,12 +162,37 @@ export default function AdminPanelPage() {
             </div>
             <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
           </button>
+
+          {/* Crear Monitor */}
+          <button
+            onClick={() => router.push("/users/new")}
+            className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"
+          >
+            <Icon name="users" size={22} className="shrink-0 text-[#1565C0]" />
+            <div className="flex flex-1 flex-col gap-0.5">
+              <p className="text-[14px] font-semibold text-[#111827]">
+                Crear Monitor
+              </p>
+              <p className="text-[12px] text-[#6B7280]">
+                Registrar nuevo monitor al sistema
+              </p>
+            </div>
+            <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
+          </button>
         </div>
       </div>
 
       <CreateEntityModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
+      />
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Cerrar sesión"
+        description="¿Estás seguro de que quieres cerrar sesión?"
+        confirmLabel="Cerrar sesión"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
       />
     </div>
   );
