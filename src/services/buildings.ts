@@ -69,6 +69,20 @@ export const removeEquipment = (classroomId: string, faultType: FaultType) =>
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
+// ── All classrooms ────────────────────────────────────────────────────────────
+
+export interface ClassroomWithBuilding {
+  id: string
+  name: string
+  building_id: string
+  building_name: string
+}
+
+export const getAllClassrooms = () =>
+  apiFetch<ClassroomWithBuilding[]>('/buildings/classrooms')
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
 export interface InfraStats {
   total_buildings: number
   total_classrooms: number

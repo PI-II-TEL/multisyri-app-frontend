@@ -13,13 +13,13 @@ import { useBuildings } from "@/hooks/useBuildings";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Building, BuildingCreate } from "@/types/buildings";
 
-export function BuildingList() {
+export function BuildingList({ autoCreate = false }: { autoCreate?: boolean }) {
   const router = useRouter();
   const { isCoordinator } = useAuth();
   const { buildings, isLoading, error, createBuilding, updateBuilding, deleteBuilding } =
     useBuildings();
 
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(autoCreate);
   const [editing, setEditing] = useState<Building | null>(null);
   const [deleting, setDeleting] = useState<Building | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);

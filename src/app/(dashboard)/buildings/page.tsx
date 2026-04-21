@@ -58,7 +58,7 @@ export default function AdminPanelPage() {
               </p>
             </button>
             <button
-              onClick={() => router.push("/buildings/list")}
+              onClick={() => router.push("/buildings/classrooms")}
               className="flex flex-col items-center gap-2 rounded-xl border-[1.5px] border-[#E5E7EB] p-4"
             >
               <Icon name="door" size={24} className="text-[#0A2463]" />
@@ -102,7 +102,7 @@ export default function AdminPanelPage() {
 
           {/* Crear Edificio / Salón */}
           <button
-            onClick={() => router.push("/buildings/list")}
+            onClick={() => router.push("/buildings/list?new=building")}
             className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"
           >
             <Icon name="circle-plus" size={22} className="shrink-0 text-[#1565C0]" />

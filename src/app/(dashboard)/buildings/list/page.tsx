@@ -1,11 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { BuildingList } from "@/components/buildings/BuildingList";
 import { Icon } from "@/components/ui/Icon";
 
-export default function BuildingsListPage() {
+function BuildingsListContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoCreate = searchParams.get("new") === "building";
 
   return (
     <div className="flex flex-col">
@@ -34,17 +37,23 @@ export default function BuildingsListPage() {
         </button>
       </header>
 
-      {/* Section label */}
       <div className="px-5 pb-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9CA3AF]">
           Edificios
         </p>
       </div>
 
-      {/* Content */}
       <div className="px-4">
-        <BuildingList />
+        <BuildingList autoCreate={autoCreate} />
       </div>
     </div>
+  );
+}
+
+export default function BuildingsListPage() {
+  return (
+    <Suspense>
+      <BuildingsListContent />
+    </Suspense>
   );
 }
