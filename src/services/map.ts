@@ -1,5 +1,6 @@
 import { apiFetch } from './api'
-import type { ClassroomMapRead, ClassroomStateRead } from '@/types/shift'
+import type { ClassroomMapRead, ClassroomStateRead, BuildingMapRead } from '@/types/shift'
+import type { BuildingStatusRead } from '@/types/buildings'
 
 export function getBuildingMap(building_id: string): Promise<ClassroomMapRead[]> {
   return apiFetch(`/map/buildings/${building_id}`)
@@ -29,4 +30,14 @@ export function listActiveObservations(
   building_id: string,
 ): Promise<ClassroomStateRead[]> {
   return apiFetch(`/map/buildings/${building_id}/observations`)
+}
+
+// ── HU-12 / HU-13: Coordinator endpoints ────────────────────────────────────
+
+export function getBuildingsOverview(): Promise<BuildingStatusRead[]> {
+  return apiFetch('/map/coordinator/buildings')
+}
+
+export function getBuildingMapReadonly(buildingId: string): Promise<BuildingMapRead> {
+  return apiFetch(`/map/coordinator/buildings/${buildingId}`)
 }

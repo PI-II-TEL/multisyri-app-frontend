@@ -229,7 +229,7 @@ export default function TicketDetailPage() {
     }
   }, [ticketId_])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { startTransition(() => { void load() }) }, [load])
 
   async function handleAccept() {
     if (!ticket) return
