@@ -1,5 +1,8 @@
 import { apiFetch } from './api'
-import type { FaultType, TicketStatus } from '@/types/shift'
+import type { SupportTicket } from '@/types/support'
+import type { FaultType } from '@/types/shift'
+
+// ── Teammate's types (HU-10 fault reporting) ──────────────────────────────────
 
 export interface ReportFaultPayload {
   fault_type: FaultType
@@ -9,29 +12,66 @@ export interface ReportFaultPayload {
   shift_session_id?: string | null
 }
 
-export interface SupportTicketRead {
-  id: string
-  status: TicketStatus
-  fault_type: FaultType
-  fault_description: string
-  resolution_note: string | null
-  escalation_reason: string | null
-  t0_reported_at: string
-  t1_accepted_at: string | null
-  t2_resolved_at: string | null
-  escalated_at: string | null
-  reported_by: string
-  assigned_to: string | null
-  escalated_to: string | null
-  closed_by: string | null
-  building_id: string
-  classroom_id: string
-  created_at: string
+// Alias so teammate's imports keep working
+export type SupportTicketRead = SupportTicket
+
+// ── Ticket CRUD ───────────────────────────────────────────────────────────────
+
+export function listMyTickets(): Promise<SupportTicket[]> {
+  return apiFetch('/support/tickets')
 }
 
-export function reportFault(payload: ReportFaultPayload): Promise<SupportTicketRead> {
+export function listTicketsForBuilding(
+  building_id: string,
+  status?: string,
+): Promise<SupportTicket[]> {
+  const params = new URLSearchParams({ building_id })
+  if (status) params.set('status', status)
+  return apiFetch(`/support/tickets?${params}`)
+}
+
+export function getTicket(ticket_id: string): Promise<SupportTicket> {
+  return apiFetch(`/support/tickets/${ticket_id}`)
+}
+
+export function createTicket(data: {
+  fault_type: string
+  fault_description: string
+  building_id: string
+  classroom_id: string
+  shift_session_id?: string | null
+}): Promise<SupportTicket> {
   return apiFetch('/support/tickets', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(data),
+  })
+}
+
+// Alias for teammate's HU-10 usage
+export function reportFault(payload: ReportFaultPayload): Promise<SupportTicket> {
+  return createTicket(payload)
+}
+
+export function acceptTicket(ticket_id: string): Promise<SupportTicket> {
+  return apiFetch(`/support/tickets/${ticket_id}/accept`, { method: 'POST' })
+}
+
+export function escalateTicket(
+  ticket_id: string,
+  escalation_reason: string,
+): Promise<SupportTicket> {
+  return apiFetch(`/support/tickets/${ticket_id}/escalate`, {
+    method: 'POST',
+    body: JSON.stringify({ escalation_reason }),
+  })
+}
+
+export function resolveTicket(
+  ticket_id: string,
+  resolution_note: string,
+): Promise<SupportTicket> {
+  return apiFetch(`/support/tickets/${ticket_id}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ resolution_note }),
   })
 }

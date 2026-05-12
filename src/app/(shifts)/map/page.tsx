@@ -3,16 +3,11 @@ import { useEffect, useState, useCallback, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import { checkOut, getActiveSession } from '@/services/shifts'
-import { getBuildingMap, toggleClassroomStatus } from '@/services/map'
+import { getBuildingMap, updateClassroomStatus } from '@/services/map'
 import { getBuilding } from '@/services/buildings'
 import { reportFault } from '@/services/support'
-import type {
-  ShiftSession,
-  OpenClassroomItem,
-  ClassroomMapRead,
-  BuildingMapRead,
-  FaultType,
-} from '@/types/shift'
+import { ObservationModal } from '@/components/map/ObservationModal'
+import type { ShiftSession, OpenClassroomItem, ClassroomMapRead, FaultType } from '@/types/shift'
 import type { ApiError } from '@/services/api'
 import { Toast } from '@/components/Toast'
 
@@ -53,83 +48,91 @@ const FAULT_LABELS: Record<FaultType, string> = {
 
 const FAULT_TYPES: FaultType[] = ['PROJECTOR', 'SPEAKERS', 'PC', 'OTHER']
 
-function DoorOpenIcon({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 4H3v16h10"/><path d="M13 4h8l-3 8 3 8h-8"/><circle cx="16" cy="12" r="1"/>
-    </svg>
-  )
-}
-
-function DoorClosedIcon({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <path d="M9 22V12h6v10"/>
-    </svg>
-  )
-}
-
-function WarningIcon({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
-      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-    </svg>
-  )
-}
-
 interface RoomCardProps {
   room: ClassroomMapRead
   canEdit: boolean
   toggling: boolean
   onToggle: () => void
-  onReportFault?: () => void
+  onObservation: () => void
+  onReportFault: () => void
 }
 
-function RoomCard({ room, canEdit, toggling, onToggle, onReportFault }: RoomCardProps) {
+function RoomCard({ room, canEdit, toggling, onToggle, onObservation, onReportFault }: RoomCardProps) {
   const ds = getDisplayStatus(room)
   const { dot, bg, numColor, textColor, label, border } = STATUS_STYLE[ds]
-  const tappable = canEdit && ds !== 'fault'
+  const canToggle = canEdit && ds !== 'fault'
 
   return (
     <div
-      onClick={tappable ? onToggle : undefined}
-      role={tappable ? 'button' : undefined}
+      onClick={canToggle ? onToggle : undefined}
+      role={canToggle ? 'button' : undefined}
       className="rounded-[14px] flex flex-col gap-1 p-3 w-full text-left transition-opacity active:opacity-70"
       style={{
         background: bg,
         height: 88,
-        border,
-        cursor: tappable ? 'pointer' : 'default',
+        border: border ?? '1.5px solid transparent',
+        cursor: canToggle ? 'pointer' : 'default',
         opacity: toggling ? 0.55 : 1,
       }}
     >
       <div className="flex items-center justify-between w-full">
-        {ds === 'fault'
-          ? <WarningIcon color={textColor} />
-          : ds === 'open'
-            ? <DoorOpenIcon color={textColor} />
-            : <DoorClosedIcon color={textColor} />}
-        {toggling ? (
-          <div
-            className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
-            style={{ borderColor: `${dot} transparent transparent transparent` }}
-          />
-        ) : canEdit && ds !== 'fault' && onReportFault ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onReportFault() }}
-            className="p-0.5 rounded opacity-40 hover:opacity-90 active:opacity-100 transition-opacity"
-            title="Reportar falla"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </button>
+        {/* Status icon */}
+        {ds === 'fault' ? (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        ) : ds === 'open' ? (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 4H3v16h10"/><path d="M13 4h8l-3 8 3 8h-8"/><circle cx="16" cy="12" r="1"/>
+          </svg>
         ) : (
-          <div className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <path d="M9 22V12h6v10"/>
+          </svg>
         )}
+
+        {/* Right-side actions */}
+        <div className="flex items-center gap-1.5">
+          {toggling ? (
+            <div
+              className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: `${dot} transparent transparent transparent` }}
+            />
+          ) : canEdit ? (
+            <>
+              {/* Observation button (HU-11) */}
+              {room.active_observation && (
+                <div className="w-2 h-2 rounded-full bg-amber-400" title="Observación activa" />
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onObservation() }}
+                className="p-0.5 rounded opacity-50 hover:opacity-100 active:opacity-100 transition-opacity"
+                title="Agregar observación"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              {/* Fault report button (HU-10) */}
+              {ds !== 'fault' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onReportFault() }}
+                  className="p-0.5 rounded opacity-40 hover:opacity-90 active:opacity-100 transition-opacity"
+                  title="Reportar falla"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />
+          )}
+        </div>
       </div>
       <span className="text-[18px] font-bold leading-tight" style={{ color: numColor }}>
         {shortName(room.classroom_name)}
@@ -139,11 +142,13 @@ function RoomCard({ room, canEdit, toggling, onToggle, onReportFault }: RoomCard
   )
 }
 
+// ── Page ───────────────────────────────────────────────────────────────────────
+
 export default function MapPage() {
   const router = useRouter()
 
   const [session, setSession]           = useState<ShiftSession | null>(null)
-  const [mapData, setMapData]           = useState<BuildingMapRead | null>(null)
+  const [classrooms, setClassrooms]     = useState<ClassroomMapRead[]>([])
   const [buildingName, setBuildingName] = useState('')
   const [loading, setLoading]           = useState(true)
   const [checking, setChecking]         = useState(false)
@@ -152,12 +157,24 @@ export default function MapPage() {
   const [togglingId, setTogglingId]     = useState<string | null>(null)
   const [toast, setToast]               = useState<{ message: string; variant: 'error' | 'success' | 'info' } | null>(null)
 
-  // Fault report modal
+  // HU-11: Observation modal
+  const [obsRoom, setObsRoom]           = useState<ClassroomMapRead | null>(null)
+
+  // HU-10: Fault report modal (teammate)
   const [faultRoom, setFaultRoom]           = useState<ClassroomMapRead | null>(null)
   const [faultType, setFaultType]           = useState<FaultType | ''>('')
   const [faultDesc, setFaultDesc]           = useState('')
   const [faultSubmitting, setFaultSubmitting] = useState(false)
   const [faultError, setFaultError]         = useState<string | null>(null)
+
+  const loadMap = useCallback(async (buildingId: string) => {
+    try {
+      const data = await getBuildingMap(buildingId)
+      startTransition(() => setClassrooms(data))
+    } catch {
+      // silently keep empty
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     try {
@@ -168,66 +185,43 @@ export default function MapPage() {
         router.replace('/home')
         return
       }
-      setSession(active)
+      startTransition(() => setSession(active))
       localStorage.setItem('active_session', JSON.stringify(active))
 
-      const [mapResult, buildingResult] = await Promise.allSettled([
-        getBuildingMap(active.building_id),
+      const [, buildingResult] = await Promise.allSettled([
+        loadMap(active.building_id),
         getBuilding(active.building_id),
       ])
-      if (mapResult.status === 'fulfilled')      setMapData(mapResult.value)
       if (buildingResult.status === 'fulfilled') setBuildingName(buildingResult.value.name)
     } catch {
       router.replace('/home')
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [router, loadMap])
 
   useEffect(() => { startTransition(() => { void loadData() }) }, [loadData])
 
-  async function handleToggle(classroomId: string) {
-    if (!session || !mapData) return
+  // HU-09: Toggle classroom status (teammate)
+  async function handleToggle(room: ClassroomMapRead) {
+    const nextStatus = room.current_status === 'OPEN' ? 'CLOSED' : 'OPEN'
 
-    // Optimistic flip — applied immediately so the UI feels instant
-    setMapData(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        classrooms: prev.classrooms.map(c =>
-          c.classroom_id === classroomId
-            ? { ...c, current_status: c.current_status === 'OPEN' ? 'CLOSED' : 'OPEN' }
-            : c,
-        ),
-      }
-    })
+    // Optimistic update
+    setClassrooms(prev => prev.map(c =>
+      c.classroom_id === room.classroom_id ? { ...c, current_status: nextStatus } : c
+    ))
+    setTogglingId(room.classroom_id)
 
-    setTogglingId(classroomId)
     try {
-      const result = await toggleClassroomStatus(session.building_id, classroomId)
-      // Confirm with the server-authoritative status
-      setMapData(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          classrooms: prev.classrooms.map(c =>
-            c.classroom_id === classroomId ? { ...c, current_status: result.status } : c,
-          ),
-        }
-      })
+      const result = await updateClassroomStatus(room.classroom_id, nextStatus)
+      setClassrooms(prev => prev.map(c =>
+        c.classroom_id === room.classroom_id ? { ...c, current_status: result.status } : c
+      ))
     } catch {
-      // Revert optimistic flip — the current value is already flipped, so flip again
-      setMapData(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          classrooms: prev.classrooms.map(c =>
-            c.classroom_id === classroomId
-              ? { ...c, current_status: c.current_status === 'OPEN' ? 'CLOSED' : 'OPEN' }
-              : c,
-          ),
-        }
-      })
+      // Revert optimistic update
+      setClassrooms(prev => prev.map(c =>
+        c.classroom_id === room.classroom_id ? { ...c, current_status: room.current_status } : c
+      ))
       setToast({ message: 'No se pudo cambiar el estado del salón.', variant: 'error' })
     } finally {
       setTogglingId(null)
@@ -262,6 +256,7 @@ export default function MapPage() {
     }
   }
 
+  // HU-10: Report fault (teammate)
   function openFaultModal(room: ClassroomMapRead) {
     setFaultRoom(room)
     setFaultType('')
@@ -272,9 +267,6 @@ export default function MapPage() {
   function closeFaultModal() {
     if (faultSubmitting) return
     setFaultRoom(null)
-    setFaultType('')
-    setFaultDesc('')
-    setFaultError(null)
   }
 
   async function handleReportFault() {
@@ -289,19 +281,11 @@ export default function MapPage() {
         classroom_id: faultRoom.classroom_id,
         shift_session_id: session.id,
       })
-      // Optimistic: mark room as having an active ticket
-      setMapData(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          classrooms: prev.classrooms.map(c =>
-            c.classroom_id === faultRoom.classroom_id
-              ? { ...c, has_active_ticket: true }
-              : c,
-          ),
-        }
-      })
+      setClassrooms(prev => prev.map(c =>
+        c.classroom_id === faultRoom.classroom_id ? { ...c, has_active_ticket: true } : c
+      ))
       closeFaultModal()
+      setToast({ message: 'Falla reportada correctamente.', variant: 'success' })
     } catch (e) {
       const err = e as ApiError
       setFaultError(err.detail ?? 'Error al reportar falla')
@@ -310,21 +294,11 @@ export default function MapPage() {
     }
   }
 
-  const classrooms = mapData?.classrooms ?? []
-  const canEdit    = mapData?.can_edit ?? false
-
-  const openCount   = classrooms.filter(c => c.current_status === 'OPEN'  && !c.has_active_ticket).length
+  const openCount   = classrooms.filter(c => c.current_status === 'OPEN'   && !c.has_active_ticket).length
   const closedCount = classrooms.filter(c => c.current_status === 'CLOSED' && !c.has_active_ticket).length
   const faultCount  = classrooms.filter(c => c.has_active_ticket).length
-
-  // Split into rows of 2 for the grid
   const pairs: ClassroomMapRead[][] = []
   for (let i = 0; i < classrooms.length; i += 2) pairs.push(classrooms.slice(i, i + 2))
-
-  // Layout (bottom-up):
-  //   BottomNav:    fixed bottom-0,        ≈ 94px  (z-50)
-  //   Checkout bar: fixed bottom-[94px],   ≈ 78px  (z-40)
-  //   → scroll area needs pb-44 to clear both
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -339,26 +313,17 @@ export default function MapPage() {
             {session ? `Turno activo desde ${formatTime(session.checkin_at)}` : ' '}
           </span>
         </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
-          <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
-          <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
-          <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
-        </svg>
-      </div>
-
-      {/* Read-only banner — only shown when there is map data but the user cannot edit */}
-      {!loading && !canEdit && mapData && (
-        <div className="mx-4 mb-1 px-3 py-2 rounded-xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        <button
+          onClick={() => session && loadMap(session.building_id)}
+          className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors"
+          aria-label="Actualizar mapa"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
           </svg>
-          <span className="text-[12px] font-medium text-[#B45309]">
-            Modo lectura — no tienes turno activo en este edificio
-          </span>
-        </div>
-      )}
+        </button>
+      </div>
 
       {/* Stats bar */}
       {classrooms.length > 0 && (
@@ -386,7 +351,7 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Room grid — pb-44 clears checkout bar + BottomNav */}
+      {/* Room grid */}
       <div className="flex-1 overflow-y-auto p-4 pb-44 flex flex-col gap-3">
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -399,9 +364,7 @@ export default function MapPage() {
               <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
             </svg>
             <span className="text-[15px] font-semibold text-[#6B7280]">Sin salones registrados</span>
-            <span className="text-[13px] text-[#9CA3AF]">
-              Este edificio aún no tiene salones configurados.
-            </span>
+            <span className="text-[13px] text-[#9CA3AF]">Este edificio aún no tiene salones configurados.</span>
           </div>
         ) : (
           pairs.map((pair, i) => (
@@ -410,10 +373,11 @@ export default function MapPage() {
                 <div key={c.classroom_id} className="flex-1">
                   <RoomCard
                     room={c}
-                    canEdit={canEdit}
+                    canEdit={true}
                     toggling={togglingId === c.classroom_id}
-                    onToggle={() => handleToggle(c.classroom_id)}
-                    onReportFault={canEdit ? () => openFaultModal(c) : undefined}
+                    onToggle={() => handleToggle(c)}
+                    onObservation={() => setObsRoom(c)}
+                    onReportFault={() => openFaultModal(c)}
                   />
                 </div>
               ))}
@@ -442,9 +406,7 @@ export default function MapPage() {
               </div>
               <div>
                 <p className="text-[15px] font-bold text-[#111827]">Salones aún abiertos</p>
-                <p className="text-[13px] text-[#6B7280] mt-1">
-                  Los siguientes salones siguen marcados como abiertos:
-                </p>
+                <p className="text-[13px] text-[#6B7280] mt-1">Los siguientes salones siguen marcados como abiertos:</p>
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -457,16 +419,10 @@ export default function MapPage() {
             </div>
             <p className="text-[13px] text-[#6B7280]">¿Quieres finalizar el turno de todas formas?</p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setOpenRooms(null)}
-                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151]"
-              >
+              <button onClick={() => setOpenRooms(null)} className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151]">
                 Cancelar
               </button>
-              <button
-                onClick={() => { setOpenRooms(null); handleCheckOut(true) }}
-                className="flex-1 py-3 rounded-xl bg-[#DC2626] text-[14px] font-bold text-white"
-              >
+              <button onClick={() => { setOpenRooms(null); handleCheckOut(true) }} className="flex-1 py-3 rounded-xl bg-[#DC2626] text-[14px] font-bold text-white">
                 Finalizar igual
               </button>
             </div>
@@ -474,7 +430,7 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Fault report modal */}
+      {/* HU-10: Fault report modal (teammate) */}
       {faultRoom && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
@@ -490,7 +446,6 @@ export default function MapPage() {
                 <p className="text-[13px] text-[#6B7280] mt-0.5">{faultRoom.classroom_name}</p>
               </div>
             </div>
-
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-semibold text-[#374151]">Tipo de equipo</span>
               <div className="grid grid-cols-2 gap-2">
@@ -510,7 +465,6 @@ export default function MapPage() {
                 ))}
               </div>
             </div>
-
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-semibold text-[#374151]">
                 Descripción <span className="font-normal text-[#9CA3AF]">(opcional)</span>
@@ -523,19 +477,13 @@ export default function MapPage() {
                 className="w-full rounded-xl border border-[#E5E7EB] px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none focus:outline-none focus:border-[#F59E0B]"
               />
             </div>
-
             {faultError && (
               <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2">
                 <span className="text-red-700 text-[12px]">{faultError}</span>
               </div>
             )}
-
             <div className="flex gap-3">
-              <button
-                onClick={closeFaultModal}
-                disabled={faultSubmitting}
-                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151] disabled:opacity-50"
-              >
+              <button onClick={closeFaultModal} disabled={faultSubmitting} className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151] disabled:opacity-50">
                 Cancelar
               </button>
               <button
@@ -552,7 +500,7 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Checkout bar — sits above BottomNav (bottom-[94px]) */}
+      {/* Checkout bar */}
       <div className="fixed bottom-[94px] left-0 right-0 bg-white border-t border-[#F3F4F6] px-4 pt-2 pb-2 z-40">
         <button
           onClick={() => handleCheckOut(false)}
@@ -573,10 +521,9 @@ export default function MapPage() {
         </button>
       </div>
 
-      {/* BottomNav — fixed bottom-0, z-50 */}
       <BottomNav />
 
-      {/* Toast for toggle errors */}
+      {/* Toast */}
       {toast && (
         <Toast
           message={toast.message}
@@ -585,6 +532,18 @@ export default function MapPage() {
           onDismiss={() => setToast(null)}
         />
       )}
+
+      {/* HU-11: Observation modal */}
+      <ObservationModal
+        open={obsRoom !== null}
+        onClose={() => setObsRoom(null)}
+        classroom={obsRoom}
+        buildingId={session?.building_id ?? ''}
+        onSuccess={() => {
+          setObsRoom(null)
+          if (session?.building_id) void loadMap(session.building_id)
+        }}
+      />
     </div>
   )
 }
