@@ -1,8 +1,10 @@
 import { apiFetch } from './api'
-import type { SupportTicket } from '@/types/support'
-import type { FaultType } from '@/types/shift'
+import type { SupportTicket, TicketStatus, FaultType } from '@/types/support'
 
-// ── Teammate's types (HU-10 fault reporting) ──────────────────────────────────
+export type { SupportTicket, FaultType }
+
+// Alias so all consumers can use either name
+export type SupportTicketRead = SupportTicket
 
 export interface ReportFaultPayload {
   fault_type: FaultType
@@ -12,8 +14,11 @@ export interface ReportFaultPayload {
   shift_session_id?: string | null
 }
 
-// Alias so teammate's imports keep working
-export type SupportTicketRead = SupportTicket
+export interface CloseTicketPayload {
+  resolution_note: string
+}
+
+export const ACTIVE_STATUSES: TicketStatus[] = ['OPEN', 'IN_PROGRESS', 'ESCALATED']
 
 // ── Ticket CRUD ───────────────────────────────────────────────────────────────
 
@@ -28,6 +33,15 @@ export function listTicketsForBuilding(
   const params = new URLSearchParams({ building_id })
   if (status) params.set('status', status)
   return apiFetch(`/support/tickets?${params}`)
+}
+
+export function listTickets(
+  buildingId: string,
+  options: { onlyActive?: boolean } = {},
+): Promise<SupportTicketRead[]> {
+  const q = new URLSearchParams({ building_id: buildingId })
+  if (options.onlyActive) q.set('only_active', 'true')
+  return apiFetch(`/support/tickets?${q}`)
 }
 
 export function getTicket(ticket_id: string): Promise<SupportTicket> {
@@ -47,7 +61,6 @@ export function createTicket(data: {
   })
 }
 
-// Alias for teammate's HU-10 usage
 export function reportFault(payload: ReportFaultPayload): Promise<SupportTicket> {
   return createTicket(payload)
 }
@@ -73,5 +86,12 @@ export function resolveTicket(
   return apiFetch(`/support/tickets/${ticket_id}/resolve`, {
     method: 'POST',
     body: JSON.stringify({ resolution_note }),
+  })
+}
+
+export function closeTicket(ticketId: string, payload: CloseTicketPayload): Promise<SupportTicketRead> {
+  return apiFetch(`/support/tickets/${ticketId}/close`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
   })
 }

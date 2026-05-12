@@ -2,13 +2,17 @@
 import { useEffect, useState, useCallback, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import BottomNav, { MONITOR_TABS, COORDINATOR_TABS } from '@/components/BottomNav'
-import { listMyTickets, listTicketsForBuilding } from '@/services/support'
-import type { SupportTicket, TicketStatus } from '@/types/support'
+import { Toast } from '@/components/Toast'
+import { listTickets, closeTicket, ACTIVE_STATUSES, listTicketsForBuilding } from '@/services/support'
+import type { SupportTicketRead } from '@/services/support'
+import type { SupportTicket } from '@/types/support'
+import type { FaultType, TicketStatus } from '@/types/shift'
+import type { ApiError } from '@/services/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 const SEED_BUILDING_ID = 'aaaaaaaa-0000-0000-0000-000000000001'
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Shared helpers (used by CoordinatorView) ──────────────────────────────────
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -24,176 +28,349 @@ function ticketId(id: string) {
   return `#TK-${id.slice(0, 4).toUpperCase()}`
 }
 
-function statusLabel(status: TicketStatus, t0: string): { label: string; color: string; bg: string } {
-  const ageMins = (Date.now() - new Date(t0).getTime()) / 60000
-  if (status === 'OPEN') {
-    if (ageMins > 15) return { label: 'Urgente',    color: '#DC2626', bg: '#FEF2F2' }
-    return               { label: 'Pendiente',  color: '#D97706', bg: '#FFFBEB' }
-  }
-  if (status === 'IN_PROGRESS') return { label: 'En Atención', color: '#1565C0', bg: '#EFF6FF' }
-  if (status === 'ESCALATED')   return { label: 'Escalado',    color: '#7C3AED', bg: '#F5F3FF' }
-  if (status === 'CLOSED')      return { label: 'Cerrado',     color: '#6B7280', bg: '#F3F4F6' }
-  return                                { label: 'Cancelado',  color: '#6B7280', bg: '#F3F4F6' }
-}
-
 function faultLabel(ft: string) {
   const map: Record<string, string> = { PROJECTOR: 'Proyector', PC: 'PC', SPEAKERS: 'Parlantes', OTHER: 'Otro' }
   return map[ft] ?? ft
 }
 
-// ── Ticket Card ────────────────────────────────────────────────────────────────
+// ── Monitor View labels/styles ─────────────────────────────────────────────────
 
-function TicketCard({ ticket, onClick }: { ticket: SupportTicket; onClick: () => void }) {
-  const { label, color, bg } = statusLabel(ticket.status, ticket.t0_reported_at)
+const FAULT_LABEL: Record<FaultType, string> = {
+  PROJECTOR: 'Proyector',
+  SPEAKERS: 'Parlantes',
+  PC: 'Computador',
+  OTHER: 'Otro',
+}
+
+const STATUS_LABEL: Record<TicketStatus, string> = {
+  OPEN: 'Abierto',
+  IN_PROGRESS: 'En progreso',
+  ESCALATED: 'Escalado',
+  CLOSED: 'Cerrado',
+  CANCELLED: 'Cancelado',
+}
+
+const STATUS_STYLE: Record<TicketStatus, { bg: string; text: string }> = {
+  OPEN:        { bg: '#DCFCE7', text: '#15803D' },
+  IN_PROGRESS: { bg: '#DBEAFE', text: '#1D4ED8' },
+  ESCALATED:   { bg: '#FEF3C7', text: '#B45309' },
+  CLOSED:      { bg: '#F3F4F6', text: '#6B7280' },
+  CANCELLED:   { bg: '#FEE2E2', text: '#DC2626' },
+}
+
+function fmt(iso: string) {
+  return new Date(iso).toLocaleTimeString('es-CO', {
+    hour: '2-digit', minute: '2-digit', hour12: true, month: 'short', day: 'numeric',
+  })
+}
+
+function elapsed(from: string, to?: string | null): string {
+  const ms = (to ? new Date(to) : new Date()).getTime() - new Date(from).getTime()
+  const min = Math.floor(ms / 60000)
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m > 0 ? `${h}h ${m}min` : `${h}h`
+}
+
+function isActive(t: SupportTicketRead) {
+  return (ACTIVE_STATUSES as string[]).includes(t.status)
+}
+
+// ── Monitor Ticket Card ────────────────────────────────────────────────────────
+
+function TicketCard({
+  ticket,
+  onClose,
+}: {
+  ticket: SupportTicketRead
+  onClose: () => void
+}) {
+  const active = isActive(ticket)
+  const { bg, text } = STATUS_STYLE[ticket.status]
+
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left rounded-2xl border border-[#E5E7EB] bg-white p-4 flex flex-col gap-2 active:bg-[#F9FAFB] transition-colors"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-semibold text-[#9CA3AF]">{ticketId(ticket.id)}</span>
+    <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[15px] font-bold text-[#111827] leading-tight truncate">
+            {FAULT_LABEL[ticket.fault_type]}
+            {ticket.classroom_name && (
+              <span className="font-normal text-[#6B7280]"> · {ticket.classroom_name}</span>
+            )}
+          </span>
+          {ticket.fault_description && (
+            <span className="text-[12px] text-[#6B7280] line-clamp-2">{ticket.fault_description}</span>
+          )}
+        </div>
         <span
-          className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-          style={{ color, background: bg }}
+          className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+          style={{ background: bg, color: text }}
         >
-          {label}
+          {STATUS_LABEL[ticket.status]}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[15px] font-bold text-[#111827] leading-snug line-clamp-2">
-          {faultLabel(ticket.fault_type)} — {ticket.fault_description}
-        </span>
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
-          </svg>
-          Edificio SYRI
+
+      <div className="flex flex-col gap-1 text-[12px] text-[#6B7280]">
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold text-[#374151] w-6">T0</span>
+          <span>{fmt(ticket.t0_reported_at)}</span>
+          {active && (
+            <span className="ml-auto text-[#F59E0B] font-medium">{elapsed(ticket.t0_reported_at)} transcurridos</span>
+          )}
         </div>
-        <div className="flex items-center gap-1 text-[12px] text-[#9CA3AF]">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-          </svg>
-          {timeAgo(ticket.t0_reported_at)}
-        </div>
+        {ticket.t1_accepted_at && (
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-[#374151] w-6">T1</span>
+            <span>{fmt(ticket.t1_accepted_at)}</span>
+            <span className="ml-auto text-[#6B7280]">
+              respuesta en {elapsed(ticket.t0_reported_at, ticket.t1_accepted_at)}
+            </span>
+          </div>
+        )}
+        {ticket.t2_resolved_at && (
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-[#374151] w-6">T2</span>
+            <span>{fmt(ticket.t2_resolved_at)}</span>
+            <span className="ml-auto text-[#6B7280]">
+              resuelto en {elapsed(ticket.t0_reported_at, ticket.t2_resolved_at)}
+            </span>
+          </div>
+        )}
       </div>
-    </button>
+
+      {ticket.resolution_note && (
+        <div className="rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-2">
+          <p className="text-[12px] font-semibold text-[#15803D] mb-0.5">Solución registrada</p>
+          <p className="text-[12px] text-[#166534]">{ticket.resolution_note}</p>
+        </div>
+      )}
+
+      {active && (
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-[10px] bg-[#0A2463] text-[13px] font-bold text-white"
+        >
+          Registrar resolución
+        </button>
+      )}
+    </div>
   )
 }
 
-// ── Monitor View ────────────────────────────────────────────────────────────────
+// ── Monitor View ───────────────────────────────────────────────────────────────
 
-type Tab = 'activos' | 'todos' | 'cerrados'
+type MonitorTab = 'active' | 'all'
 
 function MonitorView() {
-  const router = useRouter()
-  const [tickets, setTickets] = useState<SupportTicket[]>([])
-  const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<Tab>('activos')
+  const [tickets, setTickets]         = useState<SupportTicketRead[]>([])
+  const [tab, setTab]                 = useState<MonitorTab>('active')
+  const [loading, setLoading]         = useState(true)
+  const [buildingId, setBuildingId]   = useState<string | null>(null)
+  const [toast, setToast]             = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null)
 
-  const load = useCallback(async () => {
+  const [target, setTarget]           = useState<SupportTicketRead | null>(null)
+  const [note, setNote]               = useState('')
+  const [submitting, setSubmitting]   = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const loadTickets = useCallback(async (bid: string) => {
     try {
-      const data = await listMyTickets()
-      startTransition(() => setTickets(data))
+      const data = await listTickets(bid)
+      setTickets(data)
     } catch {
-      setTickets([])
+      setToast({ message: 'No se pudieron cargar los tickets.', variant: 'error' })
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    startTransition(() => {
+      try {
+        const raw = localStorage.getItem('active_session')
+        if (raw) {
+          const session = JSON.parse(raw) as { building_id: string }
+          setBuildingId(session.building_id)
+          void loadTickets(session.building_id)
+        } else {
+          setLoading(false)
+        }
+      } catch {
+        setLoading(false)
+      }
+    })
+  }, [loadTickets])
 
-  const filtered = tickets.filter(t => {
-    if (tab === 'activos')  return t.status === 'OPEN' || t.status === 'IN_PROGRESS'
-    if (tab === 'cerrados') return t.status === 'CLOSED' || t.status === 'CANCELLED'
-    return true
-  })
+  function openModal(ticket: SupportTicketRead) {
+    setTarget(ticket)
+    setNote('')
+    setSubmitError(null)
+  }
 
-  const activeCount = tickets.filter(t => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length
+  function closeModal() {
+    if (submitting) return
+    setTarget(null)
+    setNote('')
+    setSubmitError(null)
+  }
+
+  async function handleClose() {
+    if (!target || !note.trim()) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const updated = await closeTicket(target.id, { resolution_note: note.trim() })
+      setTickets(prev => prev.map(t => t.id === updated.id ? updated : t))
+      setToast({ message: 'T2 registrado — ticket cerrado correctamente.', variant: 'success' })
+      closeModal()
+    } catch (e) {
+      const err = e as ApiError
+      setSubmitError(err.detail ?? 'Error al cerrar el ticket.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const displayed = tab === 'active' ? tickets.filter(isActive) : tickets
+  const activeCount = tickets.filter(isActive).length
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex flex-col" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* Header */}
-      <div className="bg-white px-5 pt-5 pb-3 shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex flex-col gap-0.5">
-            <h1 className="text-[20px] font-bold text-[#111827]">Bandeja de Soportes</h1>
-            {activeCount > 0 && (
-              <span className="text-[13px] text-[#6B7280]">{activeCount} {activeCount === 1 ? 'ticket activo' : 'tickets activos'}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <button onClick={load} className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors" aria-label="Actualizar">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
-                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
-              </svg>
-            </button>
-            <button className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors" aria-label="Notificaciones">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
 
-        {/* Tabs */}
-        <div className="flex rounded-xl bg-[#F3F4F6] p-1 gap-1">
-          {(['activos', 'todos', 'cerrados'] as Tab[]).map(t => (
+      <div className="bg-white px-5 pt-5 pb-3 shrink-0">
+        <span className="text-[18px] font-bold text-[#0A2463]">Tickets de soporte</span>
+        {buildingId && (
+          <p className="text-[12px] text-[#6B7280] mt-0.5">Edificio del turno activo</p>
+        )}
+        <div className="flex gap-2 mt-3">
+          {(['active', 'all'] as MonitorTab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className="flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all capitalize"
+              className="px-4 py-1.5 rounded-full text-[12px] font-semibold transition-colors"
               style={{
-                background: tab === t ? '#fff' : 'transparent',
-                color: tab === t ? '#0A2463' : '#6B7280',
-                boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                background: tab === t ? '#0A2463' : '#F3F4F6',
+                color: tab === t ? '#fff' : '#6B7280',
               }}
             >
-              {t === 'activos' ? 'Activos' : t === 'todos' ? 'Todos' : 'Cerrados'}
+              {t === 'active'
+                ? `Activos${activeCount > 0 ? ` (${activeCount})` : ''}`
+                : `Todos (${tickets.length})`}
             </button>
           ))}
         </div>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-32 flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto p-4 pb-32 flex flex-col gap-3">
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-[#E5E7EB] bg-white p-4 h-[100px] animate-pulse" />
-          ))
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 text-center px-8 py-20">
-            <div className="w-16 h-16 rounded-full bg-[#F3F4F6] flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
-              </svg>
-            </div>
-            <span className="text-[15px] font-semibold text-[#6B7280]">Sin tickets</span>
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-[#0A2463] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : !buildingId ? (
+          <div className="flex flex-col items-center gap-3 text-center px-8 py-16">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+              <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+            </svg>
+            <span className="text-[15px] font-semibold text-[#6B7280]">Sin turno activo</span>
+            <span className="text-[13px] text-[#9CA3AF]">Inicia un turno para ver los tickets de tu edificio.</span>
+          </div>
+        ) : displayed.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 text-center px-8 py-16">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <span className="text-[15px] font-semibold text-[#6B7280]">
+              {tab === 'active' ? 'Sin tickets activos' : 'Sin tickets registrados'}
+            </span>
             <span className="text-[13px] text-[#9CA3AF]">
-              {tab === 'activos' ? 'No tienes tickets activos en este momento.' : 'No hay tickets en esta categoría.'}
+              {tab === 'active' ? 'Todos los tickets están cerrados.' : 'No se han reportado fallas en este edificio.'}
             </span>
           </div>
         ) : (
-          filtered.map(t => (
-            <TicketCard
-              key={t.id}
-              ticket={t}
-              onClick={() => router.push(`/support/${t.id}`)}
-            />
+          displayed.map(t => (
+            <TicketCard key={t.id} ticket={t} onClose={() => openModal(t)} />
           ))
         )}
       </div>
 
+      {target && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-[#DCFCE7] p-2 shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-[15px] font-bold text-[#111827]">Registrar resolución</p>
+                <p className="text-[13px] text-[#6B7280] mt-0.5">
+                  {FAULT_LABEL[target.fault_type]}
+                  {target.classroom_name && ` · ${target.classroom_name}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[13px] font-semibold text-[#374151]">
+                ¿Cómo se resolvió? <span className="text-[#DC2626]">*</span>
+              </label>
+              <textarea
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="Describe la solución aplicada..."
+                rows={4}
+                className="w-full rounded-xl border border-[#E5E7EB] px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none focus:outline-none focus:border-[#0A2463]"
+              />
+            </div>
+
+            {submitError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2">
+                <span className="text-red-700 text-[12px]">{submitError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={closeModal}
+                disabled={submitting}
+                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleClose}
+                disabled={!note.trim() || submitting}
+                className="flex-1 py-3 rounded-xl bg-[#0A2463] text-[14px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submitting
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : 'Confirmar T2'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BottomNav tabs={MONITOR_TABS} />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          variant={toast.variant}
+          duration={3500}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }
 
-// ── Coordinator View (Soportes Escalados) ─────────────────────────────────────
+// ── Coordinator View ───────────────────────────────────────────────────────────
 
 function CoordinatorView() {
   const router = useRouter()
@@ -216,7 +393,6 @@ function CoordinatorView() {
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* Header */}
       <div className="bg-white px-5 pt-5 pb-4 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-[20px] font-bold text-[#111827]">Soportes Escalados</h1>
@@ -242,7 +418,6 @@ function CoordinatorView() {
         </div>
       </div>
 
-      {/* List */}
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-32 flex flex-col gap-3">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
@@ -266,34 +441,24 @@ function CoordinatorView() {
               onClick={() => router.push(`/support/${ticket.id}`)}
               className="w-full text-left rounded-2xl border border-[#E5E7EB] bg-white p-4 flex flex-col gap-3 active:bg-[#F9FAFB] transition-colors"
             >
-              {/* Badge + ID */}
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-semibold text-[#9CA3AF]">{ticketId(ticket.id)}</span>
                 <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#F5F3FF] text-[#7C3AED]">Escalado</span>
               </div>
-
-              {/* Title */}
               <div className="flex flex-col gap-0.5">
                 <span className="text-[16px] font-bold text-[#111827] leading-snug">
                   {faultLabel(ticket.fault_type)}
                 </span>
                 <span className="text-[13px] text-[#6B7280] line-clamp-1">{ticket.fault_description}</span>
               </div>
-
-              {/* Location */}
               <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
                 </svg>
                 Edificio SYRI
               </div>
-
-              {/* Timeline mini */}
               <div className="flex flex-col gap-1 border-t border-[#F3F4F6] pt-3">
-                <TimelineItem
-                  dot="#9CA3AF"
-                  label={`Reportado · ${timeAgo(ticket.t0_reported_at)}`}
-                />
+                <TimelineItem dot="#9CA3AF" label={`Reportado · ${timeAgo(ticket.t0_reported_at)}`} />
                 {ticket.t1_accepted_at && (
                   <TimelineItem dot="#F59E0B" label={`Atendido · ${timeAgo(ticket.t1_accepted_at)}`} />
                 )}
