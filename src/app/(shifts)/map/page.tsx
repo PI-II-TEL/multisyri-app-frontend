@@ -5,11 +5,13 @@ import BottomNav from '@/components/BottomNav'
 import { checkOut, getActiveSession } from '@/services/shifts'
 import { getBuildingMap, toggleClassroomStatus } from '@/services/map'
 import { getBuilding } from '@/services/buildings'
+import { reportFault } from '@/services/support'
 import type {
   ShiftSession,
   OpenClassroomItem,
   ClassroomMapRead,
   BuildingMapRead,
+  FaultType,
 } from '@/types/shift'
 import type { ApiError } from '@/services/api'
 import { Toast } from '@/components/Toast'
@@ -42,6 +44,15 @@ const STATUS_STYLE: Record<
   fault:  { dot: '#F59E0B', bg: '#FFF7ED', numColor: '#B45309', textColor: '#F59E0B', label: 'Falla activa', border: '1.5px solid #FED7AA' },
 }
 
+const FAULT_LABELS: Record<FaultType, string> = {
+  PROJECTOR: 'Proyector',
+  SPEAKERS: 'Parlantes',
+  PC: 'Computador',
+  OTHER: 'Otro',
+}
+
+const FAULT_TYPES: FaultType[] = ['PROJECTOR', 'SPEAKERS', 'PC', 'OTHER']
+
 function DoorOpenIcon({ color }: { color: string }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -73,17 +84,18 @@ interface RoomCardProps {
   canEdit: boolean
   toggling: boolean
   onToggle: () => void
+  onReportFault?: () => void
 }
 
-function RoomCard({ room, canEdit, toggling, onToggle }: RoomCardProps) {
+function RoomCard({ room, canEdit, toggling, onToggle, onReportFault }: RoomCardProps) {
   const ds = getDisplayStatus(room)
   const { dot, bg, numColor, textColor, label, border } = STATUS_STYLE[ds]
   const tappable = canEdit && ds !== 'fault'
 
   return (
-    <button
+    <div
       onClick={tappable ? onToggle : undefined}
-      disabled={toggling || !tappable}
+      role={tappable ? 'button' : undefined}
       className="rounded-[14px] flex flex-col gap-1 p-3 w-full text-left transition-opacity active:opacity-70"
       style={{
         background: bg,
@@ -104,6 +116,17 @@ function RoomCard({ room, canEdit, toggling, onToggle }: RoomCardProps) {
             className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
             style={{ borderColor: `${dot} transparent transparent transparent` }}
           />
+        ) : canEdit && ds !== 'fault' && onReportFault ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onReportFault() }}
+            className="p-0.5 rounded opacity-40 hover:opacity-90 active:opacity-100 transition-opacity"
+            title="Reportar falla"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </button>
         ) : (
           <div className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />
         )}
@@ -112,7 +135,7 @@ function RoomCard({ room, canEdit, toggling, onToggle }: RoomCardProps) {
         {shortName(room.classroom_name)}
       </span>
       <span className="text-[11px] font-medium" style={{ color: textColor }}>{label}</span>
-    </button>
+    </div>
   )
 }
 
@@ -128,6 +151,13 @@ export default function MapPage() {
   const [openRooms, setOpenRooms]       = useState<OpenClassroomItem[] | null>(null)
   const [togglingId, setTogglingId]     = useState<string | null>(null)
   const [toast, setToast]               = useState<{ message: string; variant: 'error' | 'success' | 'info' } | null>(null)
+
+  // Fault report modal
+  const [faultRoom, setFaultRoom]           = useState<ClassroomMapRead | null>(null)
+  const [faultType, setFaultType]           = useState<FaultType | ''>('')
+  const [faultDesc, setFaultDesc]           = useState('')
+  const [faultSubmitting, setFaultSubmitting] = useState(false)
+  const [faultError, setFaultError]         = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -232,6 +262,54 @@ export default function MapPage() {
     }
   }
 
+  function openFaultModal(room: ClassroomMapRead) {
+    setFaultRoom(room)
+    setFaultType('')
+    setFaultDesc('')
+    setFaultError(null)
+  }
+
+  function closeFaultModal() {
+    if (faultSubmitting) return
+    setFaultRoom(null)
+    setFaultType('')
+    setFaultDesc('')
+    setFaultError(null)
+  }
+
+  async function handleReportFault() {
+    if (!faultRoom || !faultType || !session) return
+    setFaultSubmitting(true)
+    setFaultError(null)
+    try {
+      await reportFault({
+        fault_type: faultType,
+        fault_description: faultDesc,
+        building_id: session.building_id,
+        classroom_id: faultRoom.classroom_id,
+        shift_session_id: session.id,
+      })
+      // Optimistic: mark room as having an active ticket
+      setMapData(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          classrooms: prev.classrooms.map(c =>
+            c.classroom_id === faultRoom.classroom_id
+              ? { ...c, has_active_ticket: true }
+              : c,
+          ),
+        }
+      })
+      closeFaultModal()
+    } catch (e) {
+      const err = e as ApiError
+      setFaultError(err.detail ?? 'Error al reportar falla')
+    } finally {
+      setFaultSubmitting(false)
+    }
+  }
+
   const classrooms = mapData?.classrooms ?? []
   const canEdit    = mapData?.can_edit ?? false
 
@@ -258,7 +336,7 @@ export default function MapPage() {
             {loading ? 'Cargando...' : buildingName || 'Mapa de Salones'}
           </span>
           <span className="text-[12px] text-[#6B7280]">
-            {session ? `Turno activo desde ${formatTime(session.checkin_at)}` : ' '}
+            {session ? `Turno activo desde ${formatTime(session.checkin_at)}` : ' '}
           </span>
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -335,6 +413,7 @@ export default function MapPage() {
                     canEdit={canEdit}
                     toggling={togglingId === c.classroom_id}
                     onToggle={() => handleToggle(c.classroom_id)}
+                    onReportFault={canEdit ? () => openFaultModal(c) : undefined}
                   />
                 </div>
               ))}
@@ -350,7 +429,7 @@ export default function MapPage() {
         )}
       </div>
 
-      {/* Open-classrooms warning modal — unchanged from before */}
+      {/* Open-classrooms warning modal */}
       {openRooms && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
@@ -389,6 +468,84 @@ export default function MapPage() {
                 className="flex-1 py-3 rounded-xl bg-[#DC2626] text-[14px] font-bold text-white"
               >
                 Finalizar igual
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fault report modal */}
+      {faultRoom && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-amber-100 p-2 shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-[15px] font-bold text-[#111827]">Reportar falla</p>
+                <p className="text-[13px] text-[#6B7280] mt-0.5">{faultRoom.classroom_name}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[13px] font-semibold text-[#374151]">Tipo de equipo</span>
+              <div className="grid grid-cols-2 gap-2">
+                {FAULT_TYPES.map(ft => (
+                  <button
+                    key={ft}
+                    onClick={() => setFaultType(ft)}
+                    className="py-2.5 px-3 rounded-xl border text-[13px] font-medium transition-colors"
+                    style={{
+                      borderColor: faultType === ft ? '#F59E0B' : '#E5E7EB',
+                      background: faultType === ft ? '#FFF7ED' : '#fff',
+                      color: faultType === ft ? '#B45309' : '#374151',
+                    }}
+                  >
+                    {FAULT_LABELS[ft]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[13px] font-semibold text-[#374151]">
+                Descripción <span className="font-normal text-[#9CA3AF]">(opcional)</span>
+              </span>
+              <textarea
+                value={faultDesc}
+                onChange={e => setFaultDesc(e.target.value)}
+                placeholder="Describe brevemente el problema..."
+                rows={3}
+                className="w-full rounded-xl border border-[#E5E7EB] px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none focus:outline-none focus:border-[#F59E0B]"
+              />
+            </div>
+
+            {faultError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2">
+                <span className="text-red-700 text-[12px]">{faultError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={closeFaultModal}
+                disabled={faultSubmitting}
+                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleReportFault}
+                disabled={!faultType || faultSubmitting}
+                className="flex-1 py-3 rounded-xl bg-[#F59E0B] text-[14px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {faultSubmitting
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : 'Reportar falla'}
               </button>
             </div>
           </div>
