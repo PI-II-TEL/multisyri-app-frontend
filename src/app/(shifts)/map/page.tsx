@@ -3,53 +3,42 @@ import { useEffect, useState, useCallback, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import { checkOut, getActiveSession } from '@/services/shifts'
-import type { ShiftSession, Handover, OpenClassroomItem } from '@/types/shift'
+import { getBuildingMap } from '@/services/map'
+import { ObservationModal } from '@/components/map/ObservationModal'
+import type { ShiftSession, OpenClassroomItem } from '@/types/shift'
+import type { ClassroomMapEntry } from '@/types/support'
 import type { ApiError } from '@/services/api'
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
-type RoomEntry = {
-  id: string
-  name: string
-  status: 'open' | 'closed' | 'fault'
-  observation?: string | null
-}
+// ── Room Card ──────────────────────────────────────────────────────────────────
 
-function buildRooms(handover: Handover | null): RoomEntry[] {
-  if (!handover) return []
-  const map = new Map<string, RoomEntry>()
-  for (const c of handover.closed_classrooms)
-    map.set(c.classroom_id, { id: c.classroom_id, name: c.classroom_name, status: 'closed', observation: c.observation })
-  for (const o of handover.unresolved_observations) {
-    const ex = map.get(o.classroom_id)
-    if (ex) ex.observation = o.observation
-    else map.set(o.classroom_id, { id: o.classroom_id, name: o.classroom_name, status: 'open', observation: o.observation })
-  }
-  for (const t of handover.active_tickets)
-    map.set(t.classroom_id, { id: t.classroom_id, name: t.classroom_name ?? t.classroom_id, status: 'fault' })
-  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
-}
-
-function RoomCard({ room }: { room: RoomEntry }) {
-  const color = room.status === 'open' ? '#16A34A' : room.status === 'fault' ? '#F59E0B' : '#9CA3AF'
-  const bg = room.status === 'open' ? '#DCFCE7' : room.status === 'fault' ? '#FFF7ED' : '#F3F4F6'
-  const numColor = room.status === 'open' ? '#15803D' : room.status === 'fault' ? '#B45309' : '#6B7280'
-  const label = room.status === 'open' ? 'Abierto' : room.status === 'fault' ? 'Falla activa' : 'Cerrado'
-  const shortName = room.name.replace(/[Ss]al[oó]n\s*/i, '')
+function RoomCard({ room, onClick }: { room: ClassroomMapEntry; onClick: () => void }) {
+  const isOpen  = room.current_status === 'OPEN'
+  const isFault = room.has_active_ticket
+  const color   = isFault ? '#F59E0B' : isOpen ? '#16A34A' : '#9CA3AF'
+  const bg      = isFault ? '#FFF7ED' : isOpen ? '#DCFCE7' : '#F3F4F6'
+  const numColor = isFault ? '#B45309' : isOpen ? '#15803D' : '#6B7280'
+  const label   = isFault ? 'Falla activa' : isOpen ? 'Abierto' : 'Cerrado'
+  const shortName = room.classroom_name.replace(/[Ss]al[oó]n\s*/i, '')
 
   return (
-    <div className="rounded-[14px] flex flex-col gap-1 p-3" style={{ background: bg, height: 88, border: room.status === 'fault' ? '1.5px solid #FED7AA' : undefined }}>
+    <button
+      onClick={onClick}
+      className="w-full rounded-[14px] flex flex-col gap-1 p-3 text-left transition-all active:scale-95"
+      style={{ background: bg, height: 88, border: isFault ? '1.5px solid #FED7AA' : '1.5px solid transparent' }}
+    >
       <div className="flex items-center justify-between w-full">
-        {room.status === 'open' ? (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13 4H3v16h10"/><path d="M13 4h8l-3 8 3 8h-8"/><circle cx="16" cy="12" r="1"/>
-          </svg>
-        ) : room.status === 'fault' ? (
+        {isFault ? (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
             <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        ) : isOpen ? (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 4H3v16h10"/><path d="M13 4h8l-3 8 3 8h-8"/><circle cx="16" cy="12" r="1"/>
           </svg>
         ) : (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -57,27 +46,44 @@ function RoomCard({ room }: { room: RoomEntry }) {
             <path d="M9 22V12h6v10"/>
           </svg>
         )}
-        <div className="rounded w-2 h-2" style={{ background: color }} />
+        <div className="flex items-center gap-1.5">
+          {room.active_observation && (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          )}
+          <div className="rounded w-2 h-2" style={{ background: color }} />
+        </div>
       </div>
       <span className="text-[18px] font-bold leading-tight" style={{ color: numColor }}>{shortName}</span>
       <span className="text-[11px] font-medium" style={{ color }}>{label}</span>
-    </div>
+    </button>
   )
 }
 
+// ── Page ───────────────────────────────────────────────────────────────────────
+
 export default function MapPage() {
   const router = useRouter()
-  const [session, setSession] = useState<ShiftSession | null>(null)
-  const [handover, setHandover] = useState<Handover | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [checking, setChecking] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [openRooms, setOpenRooms] = useState<OpenClassroomItem[] | null>(null)
+  const [session, setSession]       = useState<ShiftSession | null>(null)
+  const [rooms, setRooms]           = useState<ClassroomMapEntry[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [checking, setChecking]     = useState(false)
+  const [error, setError]           = useState<string | null>(null)
+  const [openRooms, setOpenRooms]   = useState<OpenClassroomItem[] | null>(null)
+  const [selected, setSelected]     = useState<ClassroomMapEntry | null>(null)
+
+  const loadMap = useCallback(async (buildingId: string) => {
+    try {
+      const data = await getBuildingMap(buildingId)
+      startTransition(() => setRooms(data))
+    } catch {
+      // silently keep empty — map might not have states yet
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     try {
-      const hRaw = localStorage.getItem('handover')
-      if (hRaw) setHandover(JSON.parse(hRaw))
       const active = await getActiveSession()
       if (!active) {
         localStorage.removeItem('active_session')
@@ -85,14 +91,15 @@ export default function MapPage() {
         router.replace('/home')
         return
       }
-      setSession(active)
+      startTransition(() => setSession(active))
       localStorage.setItem('active_session', JSON.stringify(active))
+      await loadMap(active.building_id)
     } catch {
       router.replace('/home')
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [router, loadMap])
 
   useEffect(() => { startTransition(() => { void loadData() }) }, [loadData])
 
@@ -124,18 +131,11 @@ export default function MapPage() {
     }
   }
 
-  const rooms = buildRooms(handover)
-  const pairs: RoomEntry[][] = []
+  const openCount  = rooms.filter(r => r.current_status === 'OPEN').length
+  const closedCount = rooms.filter(r => r.current_status === 'CLOSED').length
+  const faultCount  = rooms.filter(r => r.has_active_ticket).length
+  const pairs: ClassroomMapEntry[][] = []
   for (let i = 0; i < rooms.length; i += 2) pairs.push(rooms.slice(i, i + 2))
-
-  const openCount = rooms.filter(r => r.status === 'open').length
-  const closedCount = rooms.filter(r => r.status === 'closed').length
-  const faultCount = rooms.filter(r => r.status === 'fault').length
-
-  // Layout stack (bottom-up):
-  // BottomNav:    fixed bottom-0,        height ~94px  (z-50)
-  // Checkout bar: fixed bottom-[94px],   height ~78px  (z-40)
-  // Total reserved: ~172px → pb-44 on scroll area
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -144,18 +144,22 @@ export default function MapPage() {
       <div className="flex items-center justify-between px-5 pt-5 pb-2 shrink-0">
         <div className="flex flex-col gap-0.5">
           <span className="text-[18px] font-bold text-[#0A2463]">
-            {loading ? 'Cargando...' : 'Edificio A · Turno Activo'}
+            {loading ? 'Cargando...' : 'Edificio SYRI · Turno Activo'}
           </span>
           <span className="text-[12px] text-[#6B7280]">
-            {session ? `Activo desde ${formatTime(session.checkin_at)}` : ' '}
+            {session ? `Activo desde ${formatTime(session.checkin_at)}` : ' '}
           </span>
         </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
-          <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
-          <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
-          <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
-        </svg>
+        <button
+          onClick={() => session && loadMap(session.building_id)}
+          className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors"
+          aria-label="Actualizar mapa"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+          </svg>
+        </button>
       </div>
 
       {/* Stats bar */}
@@ -167,7 +171,7 @@ export default function MapPage() {
           </div>
           <div className="w-px h-4 bg-[#E5E7EB]" />
           <div className="flex-1 flex items-center justify-center gap-1.5">
-            <div className="w-2 h-2 rounded bg-[#6B7280]" />
+            <div className="w-2 h-2 rounded bg-[#9CA3AF]" />
             <span className="text-[12px] font-semibold text-[#6B7280]">{closedCount} Cerrados</span>
           </div>
           {faultCount > 0 && (
@@ -179,6 +183,16 @@ export default function MapPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Hint */}
+      {!loading && rooms.length > 0 && (
+        <div className="px-5 py-1.5 flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span className="text-[11px] text-[#9CA3AF]">Toca un salón para agregar novedades</span>
         </div>
       )}
 
@@ -200,7 +214,11 @@ export default function MapPage() {
         ) : (
           pairs.map((pair, i) => (
             <div key={i} className="flex gap-3">
-              {pair.map(r => <div key={r.id} className="flex-1"><RoomCard room={r} /></div>)}
+              {pair.map(r => (
+                <div key={r.classroom_id} className="flex-1">
+                  <RoomCard room={r} onClick={() => setSelected(r)} />
+                </div>
+              ))}
               {pair.length === 1 && <div className="flex-1" />}
             </div>
           ))
@@ -250,7 +268,7 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Checkout bar — sits above BottomNav (bottom-[94px]) */}
+      {/* Checkout bar */}
       <div className="fixed bottom-[94px] left-0 right-0 bg-white border-t border-[#F3F4F6] px-4 pt-2 pb-2 z-40">
         <button
           onClick={() => handleCheckOut(false)}
@@ -271,8 +289,19 @@ export default function MapPage() {
         </button>
       </div>
 
-      {/* BottomNav — fixed bottom-0, z-50 */}
       <BottomNav />
+
+      {/* Observation / Fault Modal (HU-11 + HU-15) */}
+      <ObservationModal
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        classroom={selected}
+        buildingId=""
+        onSuccess={() => {
+          setSelected(null)
+          if (session?.building_id) void loadMap(session.building_id)
+        }}
+      />
     </div>
   )
 }

@@ -71,7 +71,6 @@ export const COORDINATOR_TABS: NavTab[] = [
   {
     href: '/support',
     label: 'SOPORTES',
-    disabled: true,
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#A1A1AA'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
