@@ -64,6 +64,13 @@ export interface OpenClassroomItem {
 
 // ── HU-09: Map state ──────────────────────────────────────────────────────────
 
+export interface ActiveTicketInfo {
+  id: string
+  fault_type: FaultType
+  fault_description: string
+  t0_reported_at: string
+}
+
 export interface ClassroomMapRead {
   classroom_id: string
   classroom_name: string
@@ -72,6 +79,7 @@ export interface ClassroomMapRead {
   last_updated_by: string | null
   active_observation: string | null
   has_active_ticket: boolean
+  active_ticket: ActiveTicketInfo | null
 }
 
 export interface BuildingMapRead {

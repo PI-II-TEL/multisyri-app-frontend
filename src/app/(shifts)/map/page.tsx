@@ -7,7 +7,7 @@ import { getBuildingMap, updateClassroomStatus } from '@/services/map'
 import { getBuilding } from '@/services/buildings'
 import { reportFault } from '@/services/support'
 import { ObservationModal } from '@/components/map/ObservationModal'
-import type { ShiftSession, OpenClassroomItem, ClassroomMapRead, FaultType } from '@/types/shift'
+import type { ShiftSession, OpenClassroomItem, ClassroomMapRead, FaultType, ActiveTicketInfo } from '@/types/shift'
 import type { ApiError } from '@/services/api'
 import { Toast } from '@/components/Toast'
 
@@ -21,6 +21,13 @@ function formatTime(iso: string) {
 
 function shortName(name: string) {
   return name.replace(/[Ss]al[oó]n\s*/i, '').trim()
+}
+
+function elapsedSince(iso: string): string {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60), m = min % 60
+  return m > 0 ? `${h}h ${m}min` : `${h}h`
 }
 
 type DisplayStatus = 'open' | 'closed' | 'fault'
@@ -55,23 +62,29 @@ interface RoomCardProps {
   onToggle: () => void
   onObservation: () => void
   onReportFault: () => void
+  onViewFault: () => void
 }
 
-function RoomCard({ room, canEdit, toggling, onToggle, onObservation, onReportFault }: RoomCardProps) {
+function RoomCard({ room, canEdit, toggling, onToggle, onObservation, onReportFault, onViewFault }: RoomCardProps) {
   const ds = getDisplayStatus(room)
   const { dot, bg, numColor, textColor, label, border } = STATUS_STYLE[ds]
   const canToggle = canEdit && ds !== 'fault'
 
+  function handleClick() {
+    if (ds === 'fault') { onViewFault(); return }
+    if (canToggle) onToggle()
+  }
+
   return (
     <div
-      onClick={canToggle ? onToggle : undefined}
-      role={canToggle ? 'button' : undefined}
+      onClick={handleClick}
+      role="button"
       className="rounded-[14px] flex flex-col gap-1 p-3 w-full text-left transition-opacity active:opacity-70"
       style={{
         background: bg,
         height: 88,
         border: border ?? '1.5px solid transparent',
-        cursor: canToggle ? 'pointer' : 'default',
+        cursor: ds === 'fault' || canToggle ? 'pointer' : 'default',
         opacity: toggling ? 0.55 : 1,
       }}
     >
@@ -150,7 +163,7 @@ export default function MapPage() {
   const [session, setSession]           = useState<ShiftSession | null>(null)
   const [classrooms, setClassrooms]     = useState<ClassroomMapRead[]>([])
   const [buildingName, setBuildingName] = useState('')
-  const [loading, setLoading]           = useState(true)
+  const [loading, setLoading]           = useState(false)
   const [checking, setChecking]         = useState(false)
   const [error, setError]               = useState<string | null>(null)
   const [openRooms, setOpenRooms]       = useState<OpenClassroomItem[] | null>(null)
@@ -160,12 +173,15 @@ export default function MapPage() {
   // HU-11: Observation modal
   const [obsRoom, setObsRoom]           = useState<ClassroomMapRead | null>(null)
 
-  // HU-10: Fault report modal (teammate)
+  // HU-10: Fault report modal
   const [faultRoom, setFaultRoom]           = useState<ClassroomMapRead | null>(null)
   const [faultType, setFaultType]           = useState<FaultType | ''>('')
   const [faultDesc, setFaultDesc]           = useState('')
   const [faultSubmitting, setFaultSubmitting] = useState(false)
   const [faultError, setFaultError]         = useState<string | null>(null)
+
+  // Fault detail bottom sheet
+  const [faultDetailRoom, setFaultDetailRoom] = useState<ClassroomMapRead | null>(null)
 
   const loadMap = useCallback(async (buildingId: string) => {
     try {
@@ -177,6 +193,7 @@ export default function MapPage() {
   }, [])
 
   const loadData = useCallback(async () => {
+    setLoading(true)
     try {
       const active = await getActiveSession()
       if (!active) {
@@ -274,15 +291,23 @@ export default function MapPage() {
     setFaultSubmitting(true)
     setFaultError(null)
     try {
-      await reportFault({
+      const ticket = await reportFault({
         fault_type: faultType,
         fault_description: faultDesc,
         building_id: session.building_id,
         classroom_id: faultRoom.classroom_id,
         shift_session_id: session.id,
       })
+      const ticketInfo: ActiveTicketInfo = {
+        id: ticket.id,
+        fault_type: ticket.fault_type,
+        fault_description: ticket.fault_description,
+        t0_reported_at: ticket.t0_reported_at,
+      }
       setClassrooms(prev => prev.map(c =>
-        c.classroom_id === faultRoom.classroom_id ? { ...c, has_active_ticket: true } : c
+        c.classroom_id === faultRoom.classroom_id
+          ? { ...c, has_active_ticket: true, active_ticket: ticketInfo }
+          : c
       ))
       closeFaultModal()
       setToast({ message: 'Falla reportada correctamente.', variant: 'success' })
@@ -378,6 +403,7 @@ export default function MapPage() {
                     onToggle={() => handleToggle(c)}
                     onObservation={() => setObsRoom(c)}
                     onReportFault={() => openFaultModal(c)}
+                    onViewFault={() => setFaultDetailRoom(c)}
                   />
                 </div>
               ))}
@@ -430,7 +456,63 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* HU-10: Fault report modal (teammate) */}
+      {/* Fault detail bottom sheet */}
+      {faultDetailRoom && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end justify-center p-4 pb-24">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-amber-100 p-2.5 shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[15px] font-bold text-[#111827]">Falla activa</p>
+                <p className="text-[13px] text-[#6B7280] mt-0.5 truncate">{faultDetailRoom.classroom_name}</p>
+              </div>
+            </div>
+
+            {faultDetailRoom.active_ticket ? (
+              <div className="rounded-xl bg-[#FFF7ED] border border-[#FED7AA] px-4 py-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[14px] font-bold text-[#B45309]">
+                    {FAULT_LABELS[faultDetailRoom.active_ticket.fault_type]}
+                  </span>
+                  <span className="text-[12px] text-[#F59E0B] font-medium shrink-0">
+                    {elapsedSince(faultDetailRoom.active_ticket.t0_reported_at)} transcurridos
+                  </span>
+                </div>
+                {faultDetailRoom.active_ticket.fault_description && (
+                  <p className="text-[13px] text-[#374151]">{faultDetailRoom.active_ticket.fault_description}</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#6B7280]">Este salón tiene una falla reportada activa.</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setFaultDetailRoom(null)}
+                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151]"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => { setFaultDetailRoom(null); router.push('/support') }}
+                className="flex-1 py-3 rounded-xl bg-[#0A2463] text-[14px] font-bold text-white flex items-center justify-center gap-1.5"
+              >
+                Ver en Soportes
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HU-10: Fault report modal */}
       {faultRoom && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
