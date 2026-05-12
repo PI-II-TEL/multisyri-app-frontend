@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, startTransition } from 'react'
 import { addObservation } from '@/services/map'
 import type { ClassroomMapRead } from '@/types/shift'
 import type { ApiError } from '@/services/api'
@@ -18,7 +18,7 @@ export function ObservationModal({ open, onClose, classroom, onSuccess }: Props)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (open) { setText(''); setError(null) }
+    if (open) { startTransition(() => { setText(''); setError(null) }) }
   }, [open])
 
   useEffect(() => {

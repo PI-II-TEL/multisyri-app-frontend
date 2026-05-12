@@ -389,7 +389,7 @@ function CoordinatorView() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { startTransition(() => { void load() }) }, [load])
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>

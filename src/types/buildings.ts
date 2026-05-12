@@ -2,6 +2,17 @@ import type { FaultType } from './shift'
 
 export type { FaultType }
 
+export type BuildingTrafficLight = 'GREEN' | 'YELLOW' | 'RED'
+
+export interface BuildingStatusRead {
+  id: string
+  name: string
+  active_monitor: string | null
+  open_tickets: number
+  active_observations: number
+  traffic_light: BuildingTrafficLight
+}
+
 export const FAULT_TYPE_LABELS: Record<FaultType, string> = {
   PROJECTOR: 'Proyector',
   SPEAKERS: 'Parlantes',

@@ -5,7 +5,7 @@ const MONITOR_HOME = '/home'
 
 const PUBLIC_PATHS = ['/login']
 const SHIFTS_PREFIXES = ['/home', '/map', '/handover']
-const DASHBOARD_PREFIXES = ['/buildings', '/users']
+const DASHBOARD_PREFIXES = ['/buildings', '/users', '/coordinator-map']
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -42,5 +42,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/login', '/home', '/map', '/handover/:path*', '/buildings', '/buildings/:path*', '/users', '/users/:path*'],
+  matcher: ['/login', '/home', '/map', '/handover/:path*', '/buildings', '/buildings/:path*', '/users', '/users/:path*', '/coordinator-map', '/coordinator-map/:path*'],
 }
