@@ -61,3 +61,32 @@ export interface OpenClassroomItem {
   classroom_id: string
   classroom_name: string
 }
+
+// ── HU-09: Map state ──────────────────────────────────────────────────────────
+
+export interface ClassroomMapRead {
+  classroom_id: string
+  classroom_name: string
+  current_status: ClassroomStatus
+  last_updated_at: string | null
+  last_updated_by: string | null
+  active_observation: string | null
+  has_active_ticket: boolean
+}
+
+export interface BuildingMapRead {
+  session_id: string | null
+  can_edit: boolean
+  classrooms: ClassroomMapRead[]
+}
+
+export interface ClassroomStateRead {
+  id: string
+  classroom_id: string
+  status: ClassroomStatus
+  observation: string | null
+  is_observation_resolved: boolean
+  recorded_at: string
+  user_id: string
+  shift_session_id: string
+}
