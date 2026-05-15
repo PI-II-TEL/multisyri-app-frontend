@@ -3,11 +3,10 @@ import { useEffect, useState, useCallback, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import BottomNav, { MONITOR_TABS, COORDINATOR_TABS } from '@/components/BottomNav'
 import { Toast } from '@/components/Toast'
-import { listTickets, closeTicket, ACTIVE_STATUSES, listTicketsForBuilding } from '@/services/support'
+import { listTickets, ACTIVE_STATUSES, listTicketsForBuilding } from '@/services/support'
 import type { SupportTicketRead } from '@/services/support'
 import type { SupportTicket } from '@/types/support'
 import type { FaultType, TicketStatus } from '@/types/shift'
-import type { ApiError } from '@/services/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 const SEED_BUILDING_ID = 'aaaaaaaa-0000-0000-0000-000000000001'
@@ -79,18 +78,15 @@ function isActive(t: SupportTicketRead) {
 
 // ── Monitor Ticket Card ────────────────────────────────────────────────────────
 
-function TicketCard({
-  ticket,
-  onClose,
-}: {
-  ticket: SupportTicketRead
-  onClose: () => void
-}) {
+function TicketCard({ ticket, onClick }: { ticket: SupportTicketRead; onClick: () => void }) {
   const active = isActive(ticket)
   const { bg, text } = STATUS_STYLE[ticket.status]
 
   return (
-    <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4 flex flex-col gap-3">
+    <button
+      onClick={onClick}
+      className="w-full text-left rounded-[14px] border border-[#E5E7EB] bg-white p-4 flex flex-col gap-3 active:bg-[#F9FAFB] transition-colors"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-[15px] font-bold text-[#111827] leading-tight truncate">
@@ -147,14 +143,14 @@ function TicketCard({
       )}
 
       {active && (
-        <button
-          onClick={onClose}
-          className="w-full py-2.5 rounded-[10px] bg-[#0A2463] text-[13px] font-bold text-white"
-        >
-          Registrar resolución
-        </button>
+        <div className="flex items-center justify-end gap-1 text-[12px] font-semibold text-[#0A2463]">
+          <span>Gestionar</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </div>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -163,16 +159,12 @@ function TicketCard({
 type MonitorTab = 'active' | 'all'
 
 function MonitorView() {
-  const [tickets, setTickets]         = useState<SupportTicketRead[]>([])
-  const [tab, setTab]                 = useState<MonitorTab>('active')
-  const [loading, setLoading]         = useState(true)
-  const [buildingId, setBuildingId]   = useState<string | null>(null)
-  const [toast, setToast]             = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null)
-
-  const [target, setTarget]           = useState<SupportTicketRead | null>(null)
-  const [note, setNote]               = useState('')
-  const [submitting, setSubmitting]   = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const router = useRouter()
+  const [tickets, setTickets]       = useState<SupportTicketRead[]>([])
+  const [tab, setTab]               = useState<MonitorTab>('active')
+  const [loading, setLoading]       = useState(true)
+  const [buildingId, setBuildingId] = useState<string | null>(null)
+  const [toast, setToast]           = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null)
 
   const loadTickets = useCallback(async (bid: string) => {
     try {
@@ -201,36 +193,6 @@ function MonitorView() {
       }
     })
   }, [loadTickets])
-
-  function openModal(ticket: SupportTicketRead) {
-    setTarget(ticket)
-    setNote('')
-    setSubmitError(null)
-  }
-
-  function closeModal() {
-    if (submitting) return
-    setTarget(null)
-    setNote('')
-    setSubmitError(null)
-  }
-
-  async function handleClose() {
-    if (!target || !note.trim()) return
-    setSubmitting(true)
-    setSubmitError(null)
-    try {
-      const updated = await closeTicket(target.id, { resolution_note: note.trim() })
-      setTickets(prev => prev.map(t => t.id === updated.id ? updated : t))
-      setToast({ message: 'T2 registrado — ticket cerrado correctamente.', variant: 'success' })
-      closeModal()
-    } catch (e) {
-      const err = e as ApiError
-      setSubmitError(err.detail ?? 'Error al cerrar el ticket.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
 
   const displayed = tab === 'active' ? tickets.filter(isActive) : tickets
   const activeCount = tickets.filter(isActive).length
@@ -291,70 +253,10 @@ function MonitorView() {
           </div>
         ) : (
           displayed.map(t => (
-            <TicketCard key={t.id} ticket={t} onClose={() => openModal(t)} />
+            <TicketCard key={t.id} ticket={t} onClick={() => router.push(`/support/${t.id}`)} />
           ))
         )}
       </div>
-
-      {target && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-[#DCFCE7] p-2 shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                  <polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-[15px] font-bold text-[#111827]">Registrar resolución</p>
-                <p className="text-[13px] text-[#6B7280] mt-0.5">
-                  {FAULT_LABEL[target.fault_type]}
-                  {target.classroom_name && ` · ${target.classroom_name}`}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-[13px] font-semibold text-[#374151]">
-                ¿Cómo se resolvió? <span className="text-[#DC2626]">*</span>
-              </label>
-              <textarea
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                placeholder="Describe la solución aplicada..."
-                rows={4}
-                className="w-full rounded-xl border border-[#E5E7EB] px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none focus:outline-none focus:border-[#0A2463]"
-              />
-            </div>
-
-            {submitError && (
-              <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2">
-                <span className="text-red-700 text-[12px]">{submitError}</span>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={closeModal}
-                disabled={submitting}
-                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151] disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleClose}
-                disabled={!note.trim() || submitting}
-                className="flex-1 py-3 rounded-xl bg-[#0A2463] text-[14px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {submitting
-                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : 'Confirmar T2'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <BottomNav tabs={MONITOR_TABS} />
 
