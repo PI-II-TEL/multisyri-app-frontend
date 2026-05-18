@@ -98,3 +98,85 @@ export interface ClassroomStateRead {
   user_id: string
   shift_session_id: string
 }
+
+// ── HU-21: Schedule shifts ────────────────────────────────────────────────────
+
+export interface ScheduleShift {
+  id: string
+  session_type: SessionType
+  day_of_week: number  // 0=Mon … 6=Sun
+  start_time: string   // "HH:MM:SS"
+  end_time: string
+  valid_from: string   // ISO date
+  valid_until: string | null
+  user_id: string
+  building_id: string
+}
+
+export interface ScheduleShiftCreate {
+  session_type: SessionType
+  day_of_week: number
+  start_time: string
+  end_time: string
+  valid_from: string
+  valid_until?: string | null
+  user_id: string
+  building_id: string
+}
+
+export interface ScheduleShiftUpdate {
+  start_time?: string
+  end_time?: string
+  valid_until?: string | null
+}
+
+export interface ScheduleUploadError {
+  row: number
+  reason: string
+}
+
+export interface ScheduleUploadResult {
+  created: number
+  failed: number
+  errors: ScheduleUploadError[]
+}
+
+// ── HU-04: Relay traceability ─────────────────────────────────────────────────
+
+export interface ShiftSessionSummary extends ShiftSession {
+  user_name: string
+  original_user_name: string | null
+  building_name: string
+  duration_hours: number | null
+}
+
+// ── HU-08: Manual shift reports ───────────────────────────────────────────────
+
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface ManualShiftReport {
+  id: string
+  session_type: SessionType
+  reported_start: string
+  reported_end: string
+  approval_status: ApprovalStatus
+  reviewer_note: string | null
+  reviewed_at: string | null
+  reviewed_by: string | null
+  user_id: string
+  building_id: string
+}
+
+export interface ManualShiftReportCreate {
+  session_type: SessionType
+  reported_start: string
+  reported_end: string
+  building_id: string
+}
+
+export interface ManualShiftReportReview {
+  approval_status: ApprovalStatus
+  reviewer_note?: string | null
+  adjusted_start?: string | null
+  adjusted_end?: string | null
+}

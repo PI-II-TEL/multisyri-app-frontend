@@ -35,6 +35,10 @@ export async function getRoles(): Promise<RoleRead[]> {
   return apiFetch<RoleRead[]>('/users/roles')
 }
 
+export async function listUsers(): Promise<UserRead[]> {
+  return apiFetch<UserRead[]>('/users')
+}
+
 export async function createUser(payload: UserCreatePayload): Promise<UserRead> {
   return apiFetch<UserRead>('/users', {
     method: 'POST',

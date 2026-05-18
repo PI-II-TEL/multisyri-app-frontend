@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { useInfraStats } from "@/hooks/useInfraStats";
 import { CreateEntityModal } from "@/components/buildings/CreateEntityModal";
+import { UploadScheduleModal } from "@/components/schedules/UploadScheduleModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { logoutRequest } from "@/services/auth";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -15,6 +16,7 @@ export default function AdminPanelPage() {
   const { stats, loading } = useInfraStats();
   const { clearAuth } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   async function handleLogout() {
@@ -111,8 +113,11 @@ export default function AdminPanelPage() {
             Turnos y Programación
           </p>
 
-          {/* Cargar Programación — sin acción */}
-          <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5">
+          {/* Cargar Programación */}
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"
+          >
             <Icon name="calendar-plus" size={22} className="shrink-0 text-[#1565C0]" />
             <div className="flex flex-1 flex-col gap-0.5">
               <p className="text-[14px] font-semibold text-[#111827]">
@@ -123,7 +128,24 @@ export default function AdminPanelPage() {
               </p>
             </div>
             <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
-          </div>
+          </button>
+
+          {/* Ver Programación */}
+          <button
+            onClick={() => router.push("/schedules")}
+            className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"
+          >
+            <Icon name="calendar-plus" size={22} className="shrink-0 text-[#1565C0]" />
+            <div className="flex flex-1 flex-col gap-0.5">
+              <p className="text-[14px] font-semibold text-[#111827]">
+                Programación
+              </p>
+              <p className="text-[12px] text-[#6B7280]">
+                Ver y administrar turnos programados
+              </p>
+            </div>
+            <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
+          </button>
 
           {/* Crear Edificio / Salón */}
           <button
@@ -198,6 +220,10 @@ export default function AdminPanelPage() {
       <CreateEntityModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
+      />
+      <UploadScheduleModal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
       />
       <ConfirmDialog
         open={showLogoutConfirm}
