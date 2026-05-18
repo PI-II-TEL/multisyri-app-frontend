@@ -187,6 +187,23 @@ export default function HomePage() {
           </div>
         </div>
 
+        <button
+          onClick={() => router.push('/forgotten-shift')}
+          className="flex items-center gap-3 rounded-xl border border-[#FED7AA] bg-[#FFF7ED] p-3.5 text-left"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div className="flex flex-1 flex-col gap-0.5">
+            <span className="text-[14px] font-semibold text-[#B45309]">¿Olvidaste registrar un turno?</span>
+            <span className="text-[12px] text-[#D97706]">Reporta retroactivamente para aprobación.</span>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+
         <span className="text-[11px] font-semibold text-[#9CA3AF] tracking-[1px]">PRÓXIMO TURNO</span>
         <div className="rounded-xl border border-[#E5E7EB] p-4 flex items-center gap-3">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1565C0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
