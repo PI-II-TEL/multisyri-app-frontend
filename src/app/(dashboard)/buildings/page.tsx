@@ -181,6 +181,23 @@ export default function AdminPanelPage() {
             <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
           </button>
 
+          {/* Relevos */}
+          <button
+            onClick={() => router.push("/relays")}
+            className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"
+          >
+            <Icon name="link" size={22} className="shrink-0 text-[#1565C0]" />
+            <div className="flex flex-1 flex-col gap-0.5">
+              <p className="text-[14px] font-semibold text-[#111827]">
+                Trazabilidad de Relevos
+              </p>
+              <p className="text-[12px] text-[#6B7280]">
+                Historial de turnos cubiertos por otro monitor
+              </p>
+            </div>
+            <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
+          </button>
+
           {/* Crear Monitor */}
           <button
             onClick={() => router.push("/users/new")}
