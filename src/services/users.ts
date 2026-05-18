@@ -22,6 +22,15 @@ export interface UserCreatePayload {
   min_hours_threshold?: number
 }
 
+export interface MonitorHoursDashboardRow {
+  id: string
+  name: string
+  email: string
+  hours_this_month: number
+  min_hours_threshold: number
+  compliance_percentage: number
+}
+
 export async function getRoles(): Promise<RoleRead[]> {
   return apiFetch<RoleRead[]>('/users/roles')
 }
@@ -30,5 +39,16 @@ export async function createUser(payload: UserCreatePayload): Promise<UserRead> 
   return apiFetch<UserRead>('/users', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export async function getHoursDashboard(year: number, month: number): Promise<MonitorHoursDashboardRow[]> {
+  return apiFetch<MonitorHoursDashboardRow[]>(`/users/hours-dashboard?year=${year}&month=${month}`)
+}
+
+export async function updateHoursThreshold(userId: string, minHoursThreshold: number): Promise<UserRead> {
+  return apiFetch<UserRead>(`/users/${userId}/hours-threshold`, {
+    method: 'PATCH',
+    body: JSON.stringify({ min_hours_threshold: minHoursThreshold }),
   })
 }
