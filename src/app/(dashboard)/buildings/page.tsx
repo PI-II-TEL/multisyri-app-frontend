@@ -8,6 +8,7 @@ import { CreateEntityModal } from "@/components/buildings/CreateEntityModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { logoutRequest } from "@/services/auth";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import NotificationPanel from "@/components/NotificationPanel";
 
 export default function AdminPanelPage() {
   const router = useRouter();
@@ -37,12 +38,7 @@ export default function AdminPanelPage() {
           <p className="text-xs text-[#6B7280]">Infraestructura y Auditoría</p>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            className="rounded-full p-1.5 text-[#6B7280] hover:bg-gray-100"
-            aria-label="Notificaciones"
-          >
-            <Icon name="bell" size={20} />
-          </button>
+          <NotificationPanel />
           <button
             onClick={() => setShowLogoutConfirm(true)}
             className="rounded-full p-1.5 text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors"
