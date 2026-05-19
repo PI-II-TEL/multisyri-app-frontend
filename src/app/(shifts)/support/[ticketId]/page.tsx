@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef, startTransition } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import BottomNav, { MONITOR_TABS, COORDINATOR_TABS } from '@/components/BottomNav'
-import { getTicket, acceptTicket, escalateTicket, resolveTicket } from '@/services/support'
+import { getTicket, acceptTicket, escalateTicket, resolveTicket, cancelTicket } from '@/services/support'
 import type { SupportTicket } from '@/types/support'
 import { useAuth } from '@/contexts/AuthContext'
 import type { ApiError } from '@/services/api'
@@ -270,19 +270,12 @@ export default function TicketDetailPage() {
     setDialog(null)
   }
 
-  async function handleVoid() {
+  // HU-24: coordinator annuls a ticket — uses cancel endpoint with reason
+  async function handleVoid(reason: string) {
     if (!ticket) return
-    setActing(true)
-    try {
-      const updated = await resolveTicket(ticket.id, 'Ticket anulado por el coordinador.')
-      setTicket(updated)
-      setDialog(null)
-    } catch (e) {
-      const err = e as ApiError
-      setError(err.detail ?? 'Error al anular')
-    } finally {
-      setActing(false)
-    }
+    const updated = await cancelTicket(ticket.id, reason)
+    setTicket(updated)
+    setDialog(null)
   }
 
   const badge = ticket ? urgencyBadge(ticket.status, ticket.t0_reported_at) : null
@@ -409,8 +402,20 @@ export default function TicketDetailPage() {
         {ticket && (
           <div className="fixed bottom-[78px] left-0 right-0 bg-white border-t border-[#F3F4F6] px-4 pt-3 pb-3 z-40 flex flex-col gap-2 max-w-2xl mx-auto">
             {isCoordinator ? (
-              // Coordinator actions
-              ticket.status === 'ESCALATED' || ticket.status === 'IN_PROGRESS' ? (
+              // Coordinator actions — HU-24
+              ticket.status === 'OPEN' ? (
+                // Can only cancel/void an OPEN ticket
+                <button
+                  onClick={() => setDialog('void')}
+                  className="w-full h-[50px] rounded-2xl border border-red-200 bg-red-50 text-[15px] font-bold text-red-600 flex items-center justify-center gap-2 hover:bg-red-100 transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                  Anular Ticket (Error de reporte)
+                </button>
+              ) : ticket.status === 'ESCALATED' || ticket.status === 'IN_PROGRESS' ? (
                 <>
                   <button
                     onClick={() => setDialog('resolve')}
@@ -521,43 +526,16 @@ export default function TicketDetailPage() {
         />
       )}
 
-      {/* Void confirmation */}
+      {/* Void dialog — HU-24: requires reason, calls cancelTicket */}
       {dialog === 'void' && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setDialog(null)} aria-hidden="true" />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 flex flex-col gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-              </div>
-              <div className="flex flex-col gap-1">
-                <h3 className="text-[16px] font-bold text-[#111827]">Anular ticket</h3>
-                <p className="text-[13px] text-[#6B7280]">
-                  Esta acción cerrará el ticket como anulado. No se podrá revertir.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-1">
-              <button
-                onClick={() => setDialog(null)}
-                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151]"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleVoid}
-                disabled={acting}
-                className="flex-1 py-3 rounded-xl bg-red-600 text-[14px] font-bold text-white disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                {acting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                Anular
-              </button>
-            </div>
-          </div>
-        </div>
+        <ActionDialog
+          title="Anular ticket"
+          placeholder="Motivo de la anulación (ej: reportado por error)…"
+          confirmLabel="Anular Ticket"
+          confirmColor="#DC2626"
+          onConfirm={handleVoid}
+          onCancel={() => setDialog(null)}
+        />
       )}
     </>
   )

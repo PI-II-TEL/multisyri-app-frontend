@@ -154,3 +154,12 @@ export function reviewManualReport(id: string, data: ManualShiftReportReview): P
     body: JSON.stringify(data),
   })
 }
+
+// ── HU-24: Force close session ───────────────────────────────────────────────
+
+export function forceCloseSession(id: string, reason: string): Promise<ShiftSessionSummary> {
+  return apiFetch(`/shifts/sessions/${id}/force-close`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+}

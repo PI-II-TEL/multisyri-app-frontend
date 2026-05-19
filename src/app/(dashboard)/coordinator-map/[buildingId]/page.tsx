@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, startTransition, useCallback } from 'react'
+import { useState, useEffect, startTransition, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { getBuildingMapReadonly } from '@/services/map'
 import { getBuilding } from '@/services/buildings'
@@ -36,7 +36,6 @@ function ReadonlyRoomCard({ room }: { room: ClassroomMapRead }) {
       style={{ background: bg, height: 88, border: border ?? '1.5px solid transparent' }}
     >
       <div className="flex items-center justify-between w-full">
-        {/* Status icon */}
         {ds === 'fault' ? (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
@@ -55,7 +54,6 @@ function ReadonlyRoomCard({ room }: { room: ClassroomMapRead }) {
             <path d="M9 22V12h6v10"/>
           </svg>
         )}
-        {/* Read-only status dot */}
         <div className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />
       </div>
       <span className="text-[18px] font-bold leading-tight" style={{ color: numColor }}>
@@ -66,6 +64,11 @@ function ReadonlyRoomCard({ room }: { room: ClassroomMapRead }) {
   )
 }
 
+function getWsUrl(): string {
+  const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'
+  return api.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '') + '/api/v1/ws/map'
+}
+
 export default function CoordinatorBuildingMapPage() {
   const { buildingId } = useParams<{ buildingId: string }>()
   const router = useRouter()
@@ -74,9 +77,12 @@ export default function CoordinatorBuildingMapPage() {
   const [buildingName, setBuildingName] = useState('')
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState<string | null>(null)
+  const [wsStatus, setWsStatus]         = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
+  const wsRef                           = useRef<WebSocket | null>(null)
+  const reconnectTimer                  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectWsRef                    = useRef<() => void>(() => {})
 
   const load = useCallback(async () => {
-    setLoading(true)
     setError(null)
     try {
       const [mapResult, buildingResult] = await Promise.allSettled([
@@ -96,7 +102,50 @@ export default function CoordinatorBuildingMapPage() {
     }
   }, [buildingId])
 
+  // WebSocket for real-time updates (HU-14)
+  const connectWs = useCallback(() => {
+    if (typeof window === 'undefined') return
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    const url = `${getWsUrl()}?token=${encodeURIComponent(token)}`
+    const ws = new WebSocket(url)
+    wsRef.current = ws
+    setWsStatus('connecting')
+
+    ws.onopen = () => setWsStatus('connected')
+
+    ws.onmessage = (ev: MessageEvent) => {
+      try {
+        const msg = JSON.parse(ev.data as string) as { building_id?: string }
+        // Only reload when the event is for this building
+        if (!msg.building_id || msg.building_id === buildingId) {
+          void load()
+        }
+      } catch {
+        void load()
+      }
+    }
+
+    ws.onclose = () => {
+      setWsStatus('disconnected')
+      reconnectTimer.current = setTimeout(() => connectWsRef.current(), 5000)
+    }
+
+    ws.onerror = () => ws.close()
+  }, [buildingId, load])
+
+  useEffect(() => { connectWsRef.current = connectWs }, [connectWs])
+
   useEffect(() => { startTransition(() => { void load() }) }, [load])
+
+  useEffect(() => {
+    startTransition(() => { connectWs() })
+    return () => {
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
+      wsRef.current?.close()
+    }
+  }, [connectWs])
 
   const openCount   = classrooms.filter(c => c.current_status === 'OPEN'   && !c.has_active_ticket).length
   const closedCount = classrooms.filter(c => c.current_status === 'CLOSED' && !c.has_active_ticket).length
@@ -129,18 +178,34 @@ export default function CoordinatorBuildingMapPage() {
             <p className="text-[12px] text-[#6B7280]">Estado de salones</p>
           </div>
         </div>
-        <button
-          onClick={() => void load()}
-          className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors"
-          aria-label="Actualizar"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-            <path d="M21 3v5h-5"/>
-            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-            <path d="M8 16H3v5"/>
-          </svg>
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* WS indicator */}
+          <div className="flex items-center gap-1">
+            <div
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: wsStatus === 'connected' ? '#16A34A' : wsStatus === 'connecting' ? '#F59E0B' : '#DC2626',
+              }}
+              title={wsStatus === 'connected' ? 'Tiempo real activo' : 'Sin conexión en tiempo real'}
+            />
+            <span className="text-[10px] text-[#9CA3AF]">
+              {wsStatus === 'connected' ? 'En vivo' : wsStatus === 'connecting' ? 'Conectando' : 'Offline'}
+            </span>
+          </div>
+          <button
+            onClick={() => void load()}
+            className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors"
+            aria-label="Actualizar"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+              <path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+              <path d="M8 16H3v5"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* Read-only badge */}
