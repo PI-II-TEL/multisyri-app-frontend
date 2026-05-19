@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, startTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState, startTransition, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Icon } from '@/components/ui/Icon'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { listSessions } from '@/services/shifts'
@@ -19,8 +19,11 @@ function formatDate(iso: string): string {
   })
 }
 
-export default function RelaysPage() {
+function RelaysContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const activeMode = searchParams.get('active') === 'true'
+
   const [sessions, setSessions] = useState<ShiftSessionSummary[]>([])
   const [buildings, setBuildings] = useState<Building[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,7 +36,9 @@ export default function RelaysPage() {
     setLoading(true)
     setError(null)
     try {
-      const params: Parameters<typeof listSessions>[0] = { only_relays: true }
+      const params: Parameters<typeof listSessions>[0] = activeMode
+        ? { status: 'ACTIVE' }
+        : { only_relays: true }
       if (filterBuilding) params.building_id = filterBuilding
       if (dateFrom) params.date_from = `${dateFrom}T00:00:00`
       if (dateTo) params.date_to = `${dateTo}T23:59:59`
@@ -44,11 +49,11 @@ export default function RelaysPage() {
       })
     } catch (err) {
       const apiErr = err as ApiError
-      setError(apiErr.detail ?? 'No se pudo cargar la trazabilidad de relevos.')
+      setError(apiErr.detail ?? 'No se pudo cargar las sesiones.')
     } finally {
       setLoading(false)
     }
-  }, [filterBuilding, dateFrom, dateTo])
+  }, [activeMode, filterBuilding, dateFrom, dateTo])
 
   useEffect(() => {
     startTransition(() => {
@@ -56,7 +61,7 @@ export default function RelaysPage() {
     })
   }, [load])
 
-  const totalRelays = useMemo(() => sessions.length, [sessions])
+  const totalSessions = useMemo(() => sessions.length, [sessions])
 
   return (
     <div className="flex flex-col">
@@ -69,8 +74,14 @@ export default function RelaysPage() {
           <Icon name="chevron-left" size={22} />
         </button>
         <div className="flex flex-col gap-0.5">
-          <h1 className="text-lg font-bold text-[#0A2463]">Trazabilidad de relevos</h1>
-          <p className="text-xs text-[#6B7280]">{totalRelays} relevos registrados</p>
+          <h1 className="text-lg font-bold text-[#0A2463]">
+            {activeMode ? 'Sesiones Activas' : 'Trazabilidad de relevos'}
+          </h1>
+          <p className="text-xs text-[#6B7280]">
+            {activeMode
+              ? `${totalSessions} sesión${totalSessions !== 1 ? 'es' : ''} en curso`
+              : `${totalSessions} relevos registrados`}
+          </p>
         </div>
       </header>
 
@@ -119,8 +130,10 @@ export default function RelaysPage() {
           </div>
         ) : sessions.length === 0 ? (
           <EmptyState
-            title="Sin relevos"
-            description="No hay sesiones de relevo con los filtros aplicados."
+            title={activeMode ? 'Sin sesiones activas' : 'Sin relevos'}
+            description={activeMode
+              ? 'No hay monitores con turno activo en este momento.'
+              : 'No hay sesiones de relevo con los filtros aplicados.'}
           />
         ) : (
           sessions.map((s) => (
@@ -153,5 +166,13 @@ export default function RelaysPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function RelaysPage() {
+  return (
+    <Suspense>
+      <RelaysContent />
+    </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, startTransition, useState } from 'react'
 import { getNotifications, markNotificationsRead, type NotificationRead } from '@/services/notifications'
 
 function timeAgo(iso: string): string {
@@ -38,7 +38,7 @@ export default function NotificationPanel() {
   }, [])
 
   useEffect(() => {
-    if (open) void load()
+    if (open) startTransition(() => { void load() })
   }, [open, load])
 
   useEffect(() => {

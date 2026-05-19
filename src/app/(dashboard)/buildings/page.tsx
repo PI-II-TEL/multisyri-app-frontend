@@ -52,8 +52,11 @@ export default function AdminPanelPage() {
       </header>
 
       <div className="flex flex-col gap-4 px-4 pb-4">
-        {/* Emergency Card */}
-        <div className="flex items-center gap-3 rounded-[14px] border-[1.5px] border-[#FCA5A5] bg-[#FEF2F2] p-4">
+        {/* Emergency Card — HU-24 */}
+        <button
+          onClick={() => router.push("/relays?active=true")}
+          className="flex items-center gap-3 rounded-[14px] border-[1.5px] border-[#FCA5A5] bg-[#FEF2F2] p-4 text-left active:opacity-80 transition-opacity"
+        >
           <Icon name="zap" size={28} className="shrink-0 text-[#DC2626]" />
           <div className="flex flex-1 flex-col gap-1">
             <p className="text-[15px] font-bold text-[#991B1B]">
@@ -63,10 +66,10 @@ export default function AdminPanelPage() {
               Usar si un monitor olvidó hacer Check-Out
             </p>
           </div>
-          <button className="shrink-0 rounded-lg bg-[#DC2626] px-3 py-2 text-[13px] font-bold text-white">
-            Forzar
-          </button>
-        </div>
+          <span className="shrink-0 rounded-lg bg-[#DC2626] px-3 py-2 text-[13px] font-bold text-white">
+            Ver turnos
+          </span>
+        </button>
 
         {/* Infraestructura */}
         <div className="flex flex-col gap-2">
@@ -232,7 +235,24 @@ export default function AdminPanelPage() {
             <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
           </button>
 
-          {/* Log de Auditoría */}
+          {/* Historial de Tickets — HU-18 */}
+          <button
+            onClick={() => router.push("/support/history")}
+            className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"
+          >
+            <Icon name="bar-chart" size={22} className="shrink-0 text-[#1565C0]" />
+            <div className="flex flex-1 flex-col gap-0.5">
+              <p className="text-[14px] font-semibold text-[#111827]">
+                Historial de Tickets
+              </p>
+              <p className="text-[12px] text-[#6B7280]">
+                ANS, métricas y filtros avanzados
+              </p>
+            </div>
+            <Icon name="chevron-right" size={18} className="text-[#9CA3AF]" />
+          </button>
+
+          {/* Log de Auditoría — HU-25 */}
           <button
             onClick={() => router.push("/buildings/audit")}
             className="flex items-center gap-3 rounded-xl border-[1.5px] border-[#E5E7EB] p-3.5 text-left"

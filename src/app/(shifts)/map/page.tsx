@@ -59,20 +59,20 @@ interface RoomCardProps {
   room: ClassroomMapRead
   canEdit: boolean
   toggling: boolean
-  onToggle: () => void
+  onRequestToggle: () => void
   onObservation: () => void
   onReportFault: () => void
   onViewFault: () => void
 }
 
-function RoomCard({ room, canEdit, toggling, onToggle, onObservation, onReportFault, onViewFault }: RoomCardProps) {
+function RoomCard({ room, canEdit, toggling, onRequestToggle, onObservation, onReportFault, onViewFault }: RoomCardProps) {
   const ds = getDisplayStatus(room)
   const { dot, bg, numColor, textColor, label, border } = STATUS_STYLE[ds]
   const canToggle = canEdit && ds !== 'fault'
 
   function handleClick() {
     if (ds === 'fault') { onViewFault(); return }
-    if (canToggle) onToggle()
+    if (canToggle) onRequestToggle()
   }
 
   return (
@@ -182,6 +182,9 @@ export default function MapPage() {
 
   // Fault detail bottom sheet
   const [faultDetailRoom, setFaultDetailRoom] = useState<ClassroomMapRead | null>(null)
+
+  // Confirm toggle bottom sheet
+  const [confirmRoom, setConfirmRoom] = useState<ClassroomMapRead | null>(null)
 
   const loadMap = useCallback(async (buildingId: string) => {
     try {
@@ -400,7 +403,7 @@ export default function MapPage() {
                     room={c}
                     canEdit={true}
                     toggling={togglingId === c.classroom_id}
-                    onToggle={() => handleToggle(c)}
+                    onRequestToggle={() => setConfirmRoom(c)}
                     onObservation={() => setObsRoom(c)}
                     onReportFault={() => openFaultModal(c)}
                     onViewFault={() => setFaultDetailRoom(c)}
@@ -506,6 +509,61 @@ export default function MapPage() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
                 </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm toggle bottom sheet */}
+      {confirmRoom && (
+        <div className="fixed inset-0 bg-black/50 z-[80] flex items-end justify-center p-4 pb-[170px]">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <div
+                className="rounded-full p-2.5 shrink-0"
+                style={{ background: confirmRoom.current_status === 'OPEN' ? '#F3F4F6' : '#DCFCE7' }}
+              >
+                {confirmRoom.current_status === 'OPEN' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <path d="M9 22V12h6v10"/>
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M13 4H3v16h10"/><path d="M13 4h8l-3 8 3 8h-8"/><circle cx="16" cy="12" r="1"/>
+                  </svg>
+                )}
+              </div>
+              <div>
+                <p className="text-[15px] font-bold text-[#111827]">
+                  {confirmRoom.current_status === 'OPEN' ? '¿Cerrar salón?' : '¿Abrir salón?'}
+                </p>
+                <p className="text-[13px] text-[#6B7280] mt-0.5">{confirmRoom.classroom_name}</p>
+              </div>
+            </div>
+            <p className="text-[13px] text-[#6B7280]">
+              {confirmRoom.current_status === 'OPEN'
+                ? 'El salón será marcado como cerrado y ya no aparecerá disponible.'
+                : 'El salón será marcado como abierto y disponible para uso.'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmRoom(null)}
+                className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[14px] font-semibold text-[#374151]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const room = confirmRoom
+                  setConfirmRoom(null)
+                  void handleToggle(room)
+                }}
+                className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white"
+                style={{ background: confirmRoom.current_status === 'OPEN' ? '#374151' : '#16A34A' }}
+              >
+                {confirmRoom.current_status === 'OPEN' ? 'Cerrar' : 'Abrir'}
               </button>
             </div>
           </div>
