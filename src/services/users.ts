@@ -22,6 +22,19 @@ export interface UserCreatePayload {
   min_hours_threshold?: number
 }
 
+export interface UserCreatedResponse {
+  user: UserRead
+  email_sent: boolean
+  email_error: string | null
+  temporary_password: string | null
+}
+
+export interface ResetPasswordResponse {
+  email_sent: boolean
+  email_error: string | null
+  temporary_password: string | null
+}
+
 export interface MonitorHoursDashboardRow {
   id: string
   name: string
@@ -39,10 +52,16 @@ export async function listUsers(): Promise<UserRead[]> {
   return apiFetch<UserRead[]>('/users')
 }
 
-export async function createUser(payload: UserCreatePayload): Promise<UserRead> {
-  return apiFetch<UserRead>('/users', {
+export async function createUser(payload: UserCreatePayload): Promise<UserCreatedResponse> {
+  return apiFetch<UserCreatedResponse>('/users', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export async function resetUserPassword(userId: string): Promise<ResetPasswordResponse> {
+  return apiFetch<ResetPasswordResponse>(`/users/${userId}/reset-password`, {
+    method: 'POST',
   })
 }
 

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/ui/Icon'
-import { getRoles, createUser } from '@/services/users'
+import { getRoles, createUser, type UserCreatedResponse } from '@/services/users'
 import type { ApiError } from '@/services/api'
 
 function validateName(value: string): string | null {
@@ -54,9 +54,10 @@ export default function CreateMonitorPage() {
   const [email, setEmail] = useState('')
   const [minHours, setMinHours] = useState('40')
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const [result, setResult] = useState<UserCreatedResponse | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const [touched, setTouched] = useState({ name: false, email: false, minHours: false })
+  const [copied, setCopied] = useState(false)
 
   const nameError = touched.name ? validateName(name) : null
   const emailError = touched.email ? validateEmail(email) : null
@@ -84,14 +85,14 @@ export default function CreateMonitorPage() {
         return
       }
 
-      await createUser({
+      const res = await createUser({
         name: name.trim(),
         email: email.trim(),
         role_ids: [monitorRole.id],
         min_hours_threshold: parseFloat(minHours) || 40,
       })
 
-      setSuccess(true)
+      setResult(res)
     } catch (err) {
       const apiErr = err as ApiError
       setApiError(apiErr.detail ?? 'No se pudo crear el monitor. Intenta de nuevo.')
@@ -99,34 +100,78 @@ export default function CreateMonitorPage() {
     }
   }
 
-  if (success) {
+  if (result) {
+    const { email_sent, email_error, temporary_password, user } = result
+    const reset = () => {
+      setName('')
+      setEmail('')
+      setMinHours('40')
+      setTouched({ name: false, email: false, minHours: false })
+      setApiError(null)
+      setLoading(false)
+      setCopied(false)
+      setResult(null)
+    }
     return (
       <div
         className="min-h-screen bg-white flex flex-col items-center justify-center px-6 py-10"
         style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
       >
-        <div className="w-full max-w-[360px] flex flex-col items-center gap-5 text-center">
+        <div className="w-full max-w-[400px] flex flex-col items-center gap-5 text-center">
           <div className="w-16 h-16 rounded-full bg-[#F0FDF4] flex items-center justify-center">
             <Icon name="check" size={32} className="text-[#16A34A]" />
           </div>
           <div className="flex flex-col gap-1.5">
             <h2 className="text-[22px] font-bold text-[#111827]">Monitor creado</h2>
             <p className="text-[14px] text-[#6B7280] leading-relaxed">
-              La cuenta de <span className="font-semibold text-[#111827]">{name}</span> fue
-              registrada exitosamente. Se le enviará su contraseña al correo institucional.
+              La cuenta de <span className="font-semibold text-[#111827]">{user.name}</span> fue registrada.
             </p>
           </div>
+
+          {email_sent ? (
+            <div className="w-full flex items-start gap-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] p-4 text-left">
+              <Icon name="info" size={18} className="shrink-0 text-[#1565C0] mt-0.5" />
+              <p className="text-[13px] text-[#1E40AF] leading-relaxed">
+                Le enviamos la contraseña temporal a <span className="font-semibold">{user.email}</span>. Pídele que revise su bandeja y la carpeta de spam.
+              </p>
+            </div>
+          ) : (
+            <div className="w-full flex flex-col gap-3 rounded-xl bg-[#FFF7ED] border border-[#FED7AA] p-4 text-left">
+              <div className="flex items-start gap-3">
+                <Icon name="alert-circle" size={18} className="shrink-0 text-[#D97706] mt-0.5" />
+                <div className="flex flex-col gap-1">
+                  <p className="text-[13px] font-semibold text-[#B45309]">No pudimos enviar el correo</p>
+                  <p className="text-[12px] text-[#B45309] leading-relaxed">
+                    {email_error ?? 'Error desconocido.'} Entrega esta contraseña al monitor manualmente — no se volverá a mostrar.
+                  </p>
+                </div>
+              </div>
+              {temporary_password && (
+                <div className="flex items-center gap-2 rounded-lg bg-white border border-[#FED7AA] px-3 py-2.5">
+                  <code className="flex-1 text-[14px] font-mono font-bold text-[#111827] tracking-wide select-all break-all">
+                    {temporary_password}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(temporary_password)
+                        setCopied(true)
+                        setTimeout(() => setCopied(false), 2000)
+                      } catch { /* ignore */ }
+                    }}
+                    className="shrink-0 rounded-lg bg-[#0A2463] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0d2f7a] active:bg-[#091e52]"
+                  >
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 w-full mt-2">
             <button
-              onClick={() => {
-                setName('')
-                setEmail('')
-                setMinHours('40')
-                setTouched({ name: false, email: false, minHours: false })
-                setApiError(null)
-                setLoading(false)
-                setSuccess(false)
-              }}
+              onClick={reset}
               className="w-full py-[14px] rounded-2xl bg-[#0A2463] text-white text-[15px] font-bold hover:bg-[#0d2f7a] active:bg-[#091e52] transition-colors"
             >
               Crear otro monitor
@@ -170,7 +215,7 @@ export default function CreateMonitorPage() {
         <div className="flex items-start gap-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] p-4">
           <Icon name="info" size={18} className="shrink-0 text-[#1565C0] mt-0.5" />
           <p className="text-[13px] text-[#1E40AF] leading-relaxed">
-            La contraseña se genera automáticamente y se envía al correo institucional del monitor.
+            La contraseña se genera automáticamente. Si el correo no se entrega, te mostraremos la contraseña para que la entregues manualmente.
           </p>
         </div>
 

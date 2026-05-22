@@ -30,10 +30,9 @@ function elapsedSince(iso: string): string {
   return m > 0 ? `${h}h ${m}min` : `${h}h`
 }
 
-type DisplayStatus = 'open' | 'closed' | 'fault'
+type DisplayStatus = 'open' | 'closed'
 
 function getDisplayStatus(room: ClassroomMapRead): DisplayStatus {
-  if (room.has_active_ticket) return 'fault'
   return room.current_status === 'OPEN' ? 'open' : 'closed'
 }
 
@@ -43,7 +42,6 @@ const STATUS_STYLE: Record<
 > = {
   open:   { dot: '#16A34A', bg: '#DCFCE7', numColor: '#15803D', textColor: '#16A34A', label: 'Abierto' },
   closed: { dot: '#9CA3AF', bg: '#F3F4F6', numColor: '#6B7280', textColor: '#9CA3AF', label: 'Cerrado' },
-  fault:  { dot: '#F59E0B', bg: '#FFF7ED', numColor: '#B45309', textColor: '#F59E0B', label: 'Falla activa', border: '1.5px solid #FED7AA' },
 }
 
 const FAULT_LABELS: Record<FaultType, string> = {
@@ -67,11 +65,11 @@ interface RoomCardProps {
 
 function RoomCard({ room, canEdit, toggling, onRequestToggle, onObservation, onReportFault, onViewFault }: RoomCardProps) {
   const ds = getDisplayStatus(room)
-  const { dot, bg, numColor, textColor, label, border } = STATUS_STYLE[ds]
-  const canToggle = canEdit && ds !== 'fault'
+  const { dot, bg, numColor, textColor, label } = STATUS_STYLE[ds]
+  const hasFault = room.has_active_ticket
+  const canToggle = canEdit
 
   function handleClick() {
-    if (ds === 'fault') { onViewFault(); return }
     if (canToggle) onRequestToggle()
   }
 
@@ -82,29 +80,39 @@ function RoomCard({ room, canEdit, toggling, onRequestToggle, onObservation, onR
       className="rounded-[14px] flex flex-col gap-1 p-3 w-full text-left transition-opacity active:opacity-70"
       style={{
         background: bg,
-        height: 88,
-        border: border ?? '1.5px solid transparent',
-        cursor: ds === 'fault' || canToggle ? 'pointer' : 'default',
+        minHeight: 88,
+        border: hasFault ? '1.5px solid #FED7AA' : '1.5px solid transparent',
+        cursor: canToggle ? 'pointer' : 'default',
         opacity: toggling ? 0.55 : 1,
       }}
     >
       <div className="flex items-center justify-between w-full">
-        {/* Status icon */}
-        {ds === 'fault' ? (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        ) : ds === 'open' ? (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13 4H3v16h10"/><path d="M13 4h8l-3 8 3 8h-8"/><circle cx="16" cy="12" r="1"/>
-          </svg>
-        ) : (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-            <path d="M9 22V12h6v10"/>
-          </svg>
-        )}
+        {/* Status icon + fault badge */}
+        <div className="flex items-center gap-1.5">
+          {ds === 'open' ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 4H3v16h10"/><path d="M13 4h8l-3 8 3 8h-8"/><circle cx="16" cy="12" r="1"/>
+            </svg>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <path d="M9 22V12h6v10"/>
+            </svg>
+          )}
+          {hasFault && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onViewFault() }}
+              className="rounded-full p-1 bg-[#FFF7ED] border border-[#FED7AA] active:opacity-70"
+              title="Ver detalle de la falla"
+              aria-label="Ver detalle de la falla"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </button>
+          )}
+        </div>
 
         {/* Right-side actions */}
         <div className="flex items-center gap-1.5">
@@ -128,8 +136,8 @@ function RoomCard({ room, canEdit, toggling, onRequestToggle, onObservation, onR
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </button>
-              {/* Fault report button (HU-10) */}
-              {ds !== 'fault' && (
+              {/* Fault report button (HU-10) — solo si no hay falla activa ya */}
+              {!hasFault && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onReportFault() }}
                   className="p-0.5 rounded opacity-40 hover:opacity-90 active:opacity-100 transition-opacity"
@@ -151,6 +159,12 @@ function RoomCard({ room, canEdit, toggling, onRequestToggle, onObservation, onR
         {shortName(room.classroom_name)}
       </span>
       <span className="text-[11px] font-medium" style={{ color: textColor }}>{label}</span>
+      {hasFault && room.active_ticket && (
+        <span className="text-[10px] font-semibold text-[#B45309] flex items-center gap-1">
+          <span className="w-1 h-1 rounded-full bg-[#F59E0B]" />
+          Falla activa · {elapsedSince(room.active_ticket.t0_reported_at)}
+        </span>
+      )}
     </div>
   )
 }
@@ -322,8 +336,8 @@ export default function MapPage() {
     }
   }
 
-  const openCount   = classrooms.filter(c => c.current_status === 'OPEN'   && !c.has_active_ticket).length
-  const closedCount = classrooms.filter(c => c.current_status === 'CLOSED' && !c.has_active_ticket).length
+  const openCount   = classrooms.filter(c => c.current_status === 'OPEN').length
+  const closedCount = classrooms.filter(c => c.current_status === 'CLOSED').length
   const faultCount  = classrooms.filter(c => c.has_active_ticket).length
   const pairs: ClassroomMapRead[][] = []
   for (let i = 0; i < classrooms.length; i += 2) pairs.push(classrooms.slice(i, i + 2))
@@ -547,6 +561,17 @@ export default function MapPage() {
                 ? 'El salón será marcado como cerrado y ya no aparecerá disponible.'
                 : 'El salón será marcado como abierto y disponible para uso.'}
             </p>
+            {confirmRoom.has_active_ticket && (
+              <div className="rounded-xl bg-[#FFF7ED] border border-[#FED7AA] px-3 py-2.5 flex items-start gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+                  <path d="m10.29 3.86-8.2 14.2A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .91-1.44l-8.2-14.2a1 1 0 0 0-1.82 0Z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <p className="text-[12px] text-[#B45309] leading-snug">
+                  Este salón tiene una falla activa. Puedes {confirmRoom.current_status === 'OPEN' ? 'cerrarlo' : 'abrirlo'} igual; la falla seguirá vigente hasta resolverse en Soportes.
+                </p>
+              </div>
+            )}
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmRoom(null)}
