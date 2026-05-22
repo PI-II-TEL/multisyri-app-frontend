@@ -83,13 +83,15 @@ export default function SchedulesPage() {
       arr.push(s)
       map.set(s.building_id, arr)
     }
-    return Array.from(map.entries()).map(([buildingId, items]) => ({
-      buildingId,
-      name: buildingsById[buildingId]?.name ?? 'Edificio',
-      items: items.sort((a, b) =>
-        a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time)
-      ),
-    }))
+    return Array.from(map.entries())
+      .map(([buildingId, items]) => ({
+        buildingId,
+        name: buildingsById[buildingId]?.name ?? 'Edificio',
+        items: items.sort((a, b) =>
+          a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time)
+        ),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'es'))
   }, [filtered, buildingsById])
 
   async function handleInvalidate() {
@@ -204,12 +206,20 @@ export default function SchedulesPage() {
                             {DAY_NAMES[s.day_of_week]} · {formatTime(s.start_time)}–{formatTime(s.end_time)} · {s.session_type}
                           </span>
                         </div>
-                        <button
-                          onClick={() => setConfirmDelete(s)}
-                          className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-red-600 hover:bg-red-50"
-                        >
-                          Invalidar
-                        </button>
+                        <div className="flex shrink-0 gap-1.5">
+                          <button
+                            onClick={() => router.push(`/schedules/${s.id}/edit`)}
+                            className="rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#0A2463] hover:bg-gray-50"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(s)}
+                            className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-red-600 hover:bg-red-50"
+                          >
+                            Invalidar
+                          </button>
+                        </div>
                       </div>
                       <span className="text-[11px] text-[#9CA3AF]">
                         Vigente desde {s.valid_from}
