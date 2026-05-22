@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, startTransition, useCallback, useRef } from 'react'
+import { useState, useEffect, startTransition, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getBuildingsOverview } from '@/services/map'
+import { useMapWebSocket } from '@/hooks/useMapWebSocket'
 import type { BuildingStatusRead, BuildingTrafficLight } from '@/types/buildings'
 
 const TRAFFIC: Record<BuildingTrafficLight, { dot: string; valueColor: string }> = {
@@ -28,20 +29,11 @@ function buildingRightLabel(b: BuildingStatusRead): string {
   return 'Normal'
 }
 
-function getWsUrl(): string {
-  const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'
-  return api.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '') + '/api/v1/ws/map'
-}
-
 export default function CoordinatorMapPage() {
   const router = useRouter()
   const [buildings, setBuildings] = useState<BuildingStatusRead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const connectWsRef = useRef<() => void>(() => {})
 
   const load = useCallback(async () => {
     setError(null)
@@ -55,47 +47,14 @@ export default function CoordinatorMapPage() {
     }
   }, [])
 
-  // WebSocket connection for real-time updates (HU-14)
-  const connectWs = useCallback(() => {
-    if (typeof window === 'undefined') return
-    const token = localStorage.getItem('access_token')
-    if (!token) return
-
-    const url = `${getWsUrl()}?token=${encodeURIComponent(token)}`
-    const ws = new WebSocket(url)
-    wsRef.current = ws
-    setWsStatus('connecting')
-
-    ws.onopen = () => setWsStatus('connected')
-
-    ws.onmessage = () => {
-      // Any map event triggers a silent reload of the overview
-      void load()
-    }
-
-    ws.onclose = () => {
-      setWsStatus('disconnected')
-      reconnectTimer.current = setTimeout(() => connectWsRef.current(), 5000)
-    }
-
-    ws.onerror = () => {
-      ws.close()
-    }
-  }, [load])
-
-  useEffect(() => { connectWsRef.current = connectWs }, [connectWs])
-
   useEffect(() => {
     startTransition(() => { void load() })
   }, [load])
 
-  useEffect(() => {
-    startTransition(() => { connectWs() })
-    return () => {
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-      wsRef.current?.close()
-    }
-  }, [connectWs])
+  // HU-14: any map event in the campus triggers a silent overview reload.
+  const { wsStatus } = useMapWebSocket({
+    onMessage: useCallback(() => { startTransition(() => { void load() }) }, [load]),
+  })
 
   const monitorsActive = buildings.filter(b => b.active_monitor !== null).length
   const totalFaults    = buildings.reduce((sum, b) => sum + b.open_tickets, 0)

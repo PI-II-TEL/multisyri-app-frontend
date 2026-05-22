@@ -7,6 +7,7 @@ import { getBuildingMap, updateClassroomStatus } from '@/services/map'
 import { getBuilding } from '@/services/buildings'
 import { reportFault } from '@/services/support'
 import { ObservationModal } from '@/components/map/ObservationModal'
+import { useMapWebSocket } from '@/hooks/useMapWebSocket'
 import type { ShiftSession, OpenClassroomItem, ClassroomMapRead, FaultType, ActiveTicketInfo } from '@/types/shift'
 import type { ApiError } from '@/services/api'
 import { Toast } from '@/components/Toast'
@@ -236,6 +237,19 @@ export default function MapPage() {
 
   useEffect(() => { startTransition(() => { void loadData() }) }, [loadData])
 
+  // HU-14: real-time updates from teammates in the same building.
+  const buildingId = session?.building_id
+  const { wsStatus } = useMapWebSocket({
+    enabled: !!buildingId,
+    onMessage: useCallback(
+      (msg) => {
+        if (!buildingId || msg.building_id !== buildingId) return
+        startTransition(() => { void loadMap(buildingId) })
+      },
+      [buildingId, loadMap],
+    ),
+  })
+
   // HU-09: Toggle classroom status (teammate)
   async function handleToggle(room: ClassroomMapRead) {
     const nextStatus = room.current_status === 'OPEN' ? 'CLOSED' : 'OPEN'
@@ -355,16 +369,33 @@ export default function MapPage() {
             {session ? `Turno activo desde ${formatTime(session.checkin_at)}` : ' '}
           </span>
         </div>
-        <button
-          onClick={() => session && loadMap(session.building_id)}
-          className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors"
-          aria-label="Actualizar mapa"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
-            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{
+              background:
+                wsStatus === 'connected' ? '#16A34A'
+                : wsStatus === 'connecting' ? '#F59E0B'
+                : '#9CA3AF',
+            }}
+            title={
+              wsStatus === 'connected' ? 'En vivo'
+              : wsStatus === 'connecting' ? 'Conectando…'
+              : 'Sin conexión en vivo'
+            }
+            aria-label={`Estado de actualización en vivo: ${wsStatus}`}
+          />
+          <button
+            onClick={() => session && loadMap(session.building_id)}
+            className="rounded-full p-2 text-[#6B7280] hover:bg-[#F3F4F6] transition-colors"
+            aria-label="Actualizar mapa"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Stats bar */}

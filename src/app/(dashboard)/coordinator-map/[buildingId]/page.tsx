@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, startTransition, useCallback, useRef } from 'react'
+import { useState, useEffect, startTransition, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { getBuildingMapReadonly } from '@/services/map'
 import { getBuilding } from '@/services/buildings'
+import { useMapWebSocket } from '@/hooks/useMapWebSocket'
 import type { ClassroomMapRead } from '@/types/shift'
 
 type DisplayStatus = 'open' | 'closed' | 'fault'
@@ -64,11 +65,6 @@ function ReadonlyRoomCard({ room }: { room: ClassroomMapRead }) {
   )
 }
 
-function getWsUrl(): string {
-  const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'
-  return api.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '') + '/api/v1/ws/map'
-}
-
 export default function CoordinatorBuildingMapPage() {
   const { buildingId } = useParams<{ buildingId: string }>()
   const router = useRouter()
@@ -77,10 +73,6 @@ export default function CoordinatorBuildingMapPage() {
   const [buildingName, setBuildingName] = useState('')
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState<string | null>(null)
-  const [wsStatus, setWsStatus]         = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
-  const wsRef                           = useRef<WebSocket | null>(null)
-  const reconnectTimer                  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const connectWsRef                    = useRef<() => void>(() => {})
 
   const load = useCallback(async () => {
     setError(null)
@@ -102,50 +94,18 @@ export default function CoordinatorBuildingMapPage() {
     }
   }, [buildingId])
 
-  // WebSocket for real-time updates (HU-14)
-  const connectWs = useCallback(() => {
-    if (typeof window === 'undefined') return
-    const token = localStorage.getItem('access_token')
-    if (!token) return
-
-    const url = `${getWsUrl()}?token=${encodeURIComponent(token)}`
-    const ws = new WebSocket(url)
-    wsRef.current = ws
-    setWsStatus('connecting')
-
-    ws.onopen = () => setWsStatus('connected')
-
-    ws.onmessage = (ev: MessageEvent) => {
-      try {
-        const msg = JSON.parse(ev.data as string) as { building_id?: string }
-        // Only reload when the event is for this building
-        if (!msg.building_id || msg.building_id === buildingId) {
-          void load()
-        }
-      } catch {
-        void load()
-      }
-    }
-
-    ws.onclose = () => {
-      setWsStatus('disconnected')
-      reconnectTimer.current = setTimeout(() => connectWsRef.current(), 5000)
-    }
-
-    ws.onerror = () => ws.close()
-  }, [buildingId, load])
-
-  useEffect(() => { connectWsRef.current = connectWs }, [connectWs])
-
   useEffect(() => { startTransition(() => { void load() }) }, [load])
 
-  useEffect(() => {
-    startTransition(() => { connectWs() })
-    return () => {
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-      wsRef.current?.close()
-    }
-  }, [connectWs])
+  // HU-14: reload only when the broadcast targets this building.
+  const { wsStatus } = useMapWebSocket({
+    onMessage: useCallback(
+      (msg) => {
+        if (msg.building_id !== buildingId) return
+        startTransition(() => { void load() })
+      },
+      [buildingId, load],
+    ),
+  })
 
   const openCount   = classrooms.filter(c => c.current_status === 'OPEN'   && !c.has_active_ticket).length
   const closedCount = classrooms.filter(c => c.current_status === 'CLOSED' && !c.has_active_ticket).length
