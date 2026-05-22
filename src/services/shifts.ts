@@ -1,4 +1,4 @@
-import { apiFetch } from './api'
+import { apiFetch, handleAuthFailure, refreshAccessToken } from './api'
 import type {
   ApprovalStatus,
   CheckInResponse,
@@ -86,13 +86,27 @@ export function invalidateSchedule(id: string): Promise<ScheduleShift> {
 export async function uploadSchedules(file: File): Promise<ScheduleUploadResult> {
   const formData = new FormData()
   formData.append('file', file)
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
   const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'
-  const res = await fetch(`${base}/schedules/upload`, {
-    method: 'POST',
-    body: formData,
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  })
+  const send = (accessToken: string | null) =>
+    fetch(`${base}/schedules/upload`, {
+      method: 'POST',
+      body: formData,
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    })
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+  let res = await send(token)
+
+  if (res.status === 401 && typeof window !== 'undefined') {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      res = await send(refreshed)
+      if (res.status === 401) handleAuthFailure()
+    } else {
+      handleAuthFailure()
+    }
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: 'Error desconocido' }))
     throw { status: res.status, detail: body.detail ?? 'Error desconocido', ...body }
