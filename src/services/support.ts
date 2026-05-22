@@ -18,7 +18,7 @@ export interface CloseTicketPayload {
   resolution_note: string
 }
 
-export const ACTIVE_STATUSES: TicketStatus[] = ['OPEN', 'IN_PROGRESS', 'ESCALATED']
+export const ACTIVE_STATUSES: TicketStatus[] = ['OPEN', 'IN_PROGRESS']
 
 // ── Ticket CRUD ───────────────────────────────────────────────────────────────
 

@@ -163,8 +163,13 @@ function LiveTimer({ since, until, status }: LiveTimerProps) {
       <span className="text-[36px] font-bold tracking-wider font-mono" style={{ color: timerColor }}>
         {since ? formatHHMMSS(elapsed) : '00:00:00'}
       </span>
-      {!since && (
+      {!since && !isEscalated && (
         <span className="text-[12px] text-[#9CA3AF]">Toca &apos;Atender&apos; para iniciar</span>
+      )}
+      {!since && isEscalated && (
+        <span className="text-[11px] font-medium text-center" style={{ color: timerColor }}>
+          Escalado automáticamente por inactividad — el coordinador lo resolverá
+        </span>
       )}
       {frozen && isRunning === false && since && (
         <span className="text-[11px] font-medium" style={{ color: timerColor }}>

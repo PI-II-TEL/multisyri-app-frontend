@@ -24,7 +24,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      className="fixed inset-0 z-50 flex items-center justify-center"
       role="dialog"
       aria-modal="true"
     >
@@ -33,7 +33,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 w-full max-w-md rounded-t-3xl bg-white p-6 sm:rounded-2xl">
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 mx-4">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-[#0A2463]">{title}</h2>
           <button

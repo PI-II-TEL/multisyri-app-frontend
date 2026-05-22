@@ -17,8 +17,11 @@ type Options = {
 const RECONNECT_DELAY_MS = 5000
 
 function getWsUrl(): string {
-  const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'
-  return api.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '') + '/api/v1/ws/map'
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}/api/v1/ws/map`
+  }
+  return 'ws://localhost:8000/api/v1/ws/map'
 }
 
 export function useMapWebSocket({ onMessage, enabled = true }: Options): { wsStatus: WsStatus } {

@@ -166,7 +166,7 @@ export default function LoginPage() {
         )}
 
         {/* ── Form ── */}
-        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5" suppressHydrationWarning>
 
           {/* Email */}
           <div className="flex flex-col gap-1.5">
@@ -193,6 +193,7 @@ export default function LoginPage() {
                 aria-describedby={emailError ? 'email-error' : undefined}
                 aria-invalid={!!emailError}
                 className={inputClass(!!emailError)}
+                suppressHydrationWarning
               />
             </div>
             {emailError && (
@@ -231,6 +232,7 @@ export default function LoginPage() {
                 aria-describedby={passwordError ? 'password-error' : undefined}
                 aria-invalid={!!passwordError}
                 className={inputClass(!!passwordError, 'pr-12')}
+                suppressHydrationWarning
               />
               <button
                 type="button"
